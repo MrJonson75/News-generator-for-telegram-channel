@@ -5,7 +5,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # =========================
 # Метаданные приложения
 # =========================
-
 class Contact(BaseModel):
     name: str
     email: str
@@ -38,11 +37,9 @@ APP_META = AppMeta(
 # =========================
 # Настройки окружения
 # =========================
-
 class Settings(BaseSettings):
     """
     Настройки приложения, загружаемые из переменных окружения и .env файла.
-    ВАЖНО: здесь ТОЛЬКО то, что реально приходит из env.
     """
 
     model_config = SettingsConfigDict(
@@ -72,7 +69,10 @@ class Settings(BaseSettings):
     news_keywords: str = Field("python,fastapi,django", alias="NEWS_KEYWORDS")
 
     # Путь к базе
-    database_url: str = Field(..., alias="DATABASE_URL")
+    database_url: str = Field(
+        "sqlite+aiosqlite:///./aibot.db",  # локальный default
+        alias="DATABASE_URL"
+    )
 
     @property
     def keywords_list(self) -> list[str]:
@@ -85,9 +85,28 @@ class Settings(BaseSettings):
             if word.strip()
         ]
 
+    @property
+    def redis_settings(self):
+        return {"url": self.redis_url}
+
+    @property
+    def celery_settings(self):
+        return {
+            "broker": self.celery_broker_url,
+            "backend": self.celery_result_backend
+        }
+
+    def log_config(self):
+        from app.logger import logger
+        logger.info("⚙️ App configuration:")
+        logger.info(f"DEBUG: {self.debug}")
+        logger.info(f"Telegram Channel: {self.telegram_channel_id}")
+        logger.info(f"News Keywords: {self.keywords_list}")
+        logger.info(f"Database URL: {self.database_url}")
+        logger.info(f"Celery Broker: {self.celery_broker_url}")
+
 
 # =========================
 # Глобальные экземпляры
 # =========================
-
 settings = Settings()
