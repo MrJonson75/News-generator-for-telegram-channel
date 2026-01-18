@@ -1,17 +1,17 @@
 import uvicorn
 from fastapi import FastAPI
-from app.config import settings
+from app.config import settings, APP_META
 from app.api.endpoints import router as endpoints_router
 
 
 app = FastAPI(
-    title=settings.app_name,
-    description=settings.description,
-    version=settings.version,
+    title=APP_META.name,
+    description=APP_META.description,
+    version=APP_META.version,
     contact={
-        "email": settings.contact["email"],
-        "url": settings.contact["url"],
-        "name": settings.contact["name"],
+        "name": APP_META.contact.name,
+        "email": APP_META.contact.email,
+        "url": APP_META.contact.url
     }
 )
 
@@ -21,8 +21,3 @@ app.include_router(endpoints_router)
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
-
-
-
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

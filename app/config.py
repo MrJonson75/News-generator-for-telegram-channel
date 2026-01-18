@@ -1,76 +1,90 @@
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# =========================
+# Метаданные приложения
+# =========================
+
+class Contact(BaseModel):
+    name: str
+    email: str
+    url: str
+
+
+class AppMeta(BaseModel):
+    name: str
+    description: str
+    version: str
+    contact: Contact
+
+
+APP_META = AppMeta(
+    name="AI-генератор постов для Telegram",
+    description=(
+        "Сервис, который не просто парсит новости, "
+        "но использует ИИ для генерации ярких, лаконичных "
+        "и интересных постов на основе собранных материалов."
+    ),
+    version="1.0.0",
+    contact=Contact(
+        name="MrJonson",
+        email="flashh@list.ru",
+        url="https://telegram.org/account",
+    ),
+)
+
+
+# =========================
+# Настройки окружения
+# =========================
+
 class Settings(BaseSettings):
     """
-    Класс настроек приложения, основанный на Pydantic BaseSettings.
-
-    Позволяет загружать конфигурацию из переменных окружения и .env файла.
-    Все атрибуты класса представляют собой настройки с типами и значениями по умолчанию.
+    Настройки приложения, загружаемые из переменных окружения и .env файла.
+    ВАЖНО: здесь ТОЛЬКО то, что реально приходит из env.
     """
 
-    model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8')
-    # Конфигурация модели: указывает Pydantic искать переменные в файле .env с кодировкой UTF-8
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
-    # Режим отладки — если True, приложение будет выводить подробные логи (по умолчанию выключен)
-    debug: bool = False
+    # Общие
+    debug: bool = Field(False, alias="DEBUG")
 
-    # Название приложения, описание
-    app_name: str = "AI-генератор постов для Telegram"
-    description: str = """
-        Сервис, который не просто парсит новости, но использует ИИ для генерации ярких, лаконичных 
-        и интересных постов на основе собранных материалов.
-    """
-    version: str = "1.0.0"
-    contact: dict = {
-        "email": "flashh@list.ru",
-        "url": "https://telegram.org/account",
-        "name": "MrJonson",
-    }
-    
-    # URL для подключения к Redis (используется для кэширования и хранения состояний)
-    redis_url: str = 'redis://127.0.0.1:6379/0'
+    # Redis / Celery
+    redis_url: str = Field(..., alias="REDIS_URL")
+    celery_broker_url: str = Field(..., alias="CELERY_BROKER_URL")
+    celery_result_backend: str = Field(..., alias="CELERY_RESULT_BACKEND")
 
-    # Идентификатор API Telegram (получается при создании приложения в @my_id_bot)
-    telegram_api_id: int = 0
-    
-    # Хэш API Telegram (секретный ключ, используется вместе с api_id)
-    telegram_api_hash: str = ''
-    
-    # Токен бота Telegram (получается от @BotFather)
-    telegram_bot_token: str = ''
-    
-    # ID канала Telegram, куда бот будет публиковать новости (может быть числом или строкой с @username)
-    telegram_channel_id: str = ''
+    # Telegram
+    telegram_api_id: int = Field(0, alias="TELEGRAM_API_ID")
+    telegram_api_hash: str = Field("", alias="TELEGRAM_API_HASH")
+    telegram_bot_token: str = Field("", alias="TELEGRAM_BOT_TOKEN")
+    telegram_channel_id: str = Field("", alias="TELEGRAM_CHANNEL_ID")
 
-    # Ключевые слова для поиска новостей (разделены запятыми, по умолчанию: python, fastapi, django)
-    news_keywords: str = 'python,fastapi,django'
+    # OpenAI
+    openai_api_key: str = Field("", alias="OPENAI_API_KEY")
+
+    # Фильтры
+    news_keywords: str = Field("python,fastapi,django", alias="NEWS_KEYWORDS")
 
     @property
     def keywords_list(self) -> list[str]:
         """
         Преобразует строку ключевых слов в список.
-        Убирает лишние пробелы и фильтрует пустые строки.
-        :return: Список очищенных ключевых слов.
-        Example: ['python', 'fastapi', 'django']
-        :rtype: list[str]
         """
-        raw_value = self.news_keywords
-        parts = [part.strip() for part in raw_value.split(',') if part.strip()]
-        return parts
+        return [
+            word.strip().lower()
+            for word in self.news_keywords.split(",")
+            if word.strip()
+        ]
 
 
-# Глобальный экземпляр настроек, используемый в приложении
+# =========================
+# Глобальные экземпляры
+# =========================
+
 settings = Settings()
-
-
-if __name__ == '__main__':
-    print(settings.debug)
-    print(settings.redis_url)
-    print(settings.telegram_api_id)
-    print(settings.telegram_bot_token)
-    print(settings.telegram_channel_id)
-    print(settings.news_keywords)
-    print(settings.telegram_api_hash)
-    print(settings.telegram_bot_token)
-    print(settings.telegram_channel_id)
