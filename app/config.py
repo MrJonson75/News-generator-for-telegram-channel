@@ -71,6 +71,9 @@ class Settings(BaseSettings):
     # Фильтры
     news_keywords: str = Field("python,fastapi,django", alias="NEWS_KEYWORDS")
 
+    # Путь к базе
+    database_url: str = Field(..., alias="DATABASE_URL")
+
     @property
     def keywords_list(self) -> list[str]:
         """
