@@ -10,7 +10,7 @@ import os
 
 # Создаем асинхронный движок SQLAlchemy для SQLite
 # DATABASE_URL = settings.database_url
-DATABASE_URL = "sqlite+aiosqlite:///./app/aibot.db"
+DATABASE_URL = "sqlite+aiosqlite:///./aibot.db"
 
 # Создаём асинхронный движок SQLAlchemy
 engine = create_async_engine(
