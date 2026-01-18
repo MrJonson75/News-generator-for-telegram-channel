@@ -14,6 +14,19 @@ class Settings(BaseSettings):
 
     # Режим отладки — если True, приложение будет выводить подробные логи (по умолчанию выключен)
     debug: bool = False
+
+    # Название приложения, описание
+    app_name: str = "AI-генератор постов для Telegram"
+    description: str = """
+        Сервис, который не просто парсит новости, но использует ИИ для генерации ярких, лаконичных 
+        и интересных постов на основе собранных материалов.
+    """
+    version: str = "1.0.0"
+    contact: dict = {
+        "email": "flashh@list.ru",
+        "url": "https://telegram.org/account",
+        "name": "MrJonson",
+    }
     
     # URL для подключения к Redis (используется для кэширования и хранения состояний)
     redis_url: str = 'redis://127.0.0.1:6379/0'
@@ -49,3 +62,15 @@ class Settings(BaseSettings):
 
 # Глобальный экземпляр настроек, используемый в приложении
 settings = Settings()
+
+
+if __name__ == '__main__':
+    print(settings.debug)
+    print(settings.redis_url)
+    print(settings.telegram_api_id)
+    print(settings.telegram_bot_token)
+    print(settings.telegram_channel_id)
+    print(settings.news_keywords)
+    print(settings.telegram_api_hash)
+    print(settings.telegram_bot_token)
+    print(settings.telegram_channel_id)
