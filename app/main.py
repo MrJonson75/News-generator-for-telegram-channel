@@ -1,4 +1,3 @@
-import uvicorn
 from fastapi import FastAPI
 from app.config import settings, APP_META
 from app.api.endpoints import router as endpoints_router

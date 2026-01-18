@@ -28,7 +28,7 @@ async def get_keywords():
 
 
 @router.get("/posts", response_model=List[Post], status_code=status.HTTP_200_OK)
-async def get_posts() -> List[NewsItem]:
+async def get_posts() -> List[Post]:
     pass
 
 

@@ -13,7 +13,7 @@ class NewsItem(BaseModel):
     связанных с новостями из внешних источников.
     """
 
-    news_id: str = Field(
+    news_id: UUID = Field(
         ...,
         description="Уникальный идентификатор новости в формате UUID или хеша",
         examples=["123e4567-e89b-12d3-a456-426614174000"]
