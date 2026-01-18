@@ -1,17 +1,14 @@
-import asyncio
+# app/database.py
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
-from app.config import settings
 from app.logger import logger
 
 
 
 
-# Создаем асинхронный движок SQLAlchemy для SQLite
-DATABASE_URL = settings.database_url
-
+DATABASE_URL = "sqlite+aiosqlite:///./aibot.db"
 
 # Создаём асинхронный движок SQLAlchemy
 engine = create_async_engine(
@@ -53,10 +50,11 @@ async def test_connection():
     Если база и таблицы доступны, возвращает 1.
     """
     try:
-        async with engine.begin() as conn:
+        async with engine.connect() as conn:  # <- вместо engine.begin()
             result = await conn.execute(text("SELECT 1"))
-            logger.info(f"✅ Database connection OK: {result.scalar()}")
-            return f"✅ Database connection OK: {result.scalar()}"
+            value = result.scalar()  # безопасно, объект ещё открыт
+            logger.info(f"✅ Database connection OK: {value}")
+            return f"✅ Database connection OK: {value}"
     except Exception as e:
         logger.exception(f"❌ Database connection failed: {e}")
         return f"❌ Database connection failed: {e}"

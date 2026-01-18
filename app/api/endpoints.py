@@ -1,7 +1,7 @@
 from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.api.schemas import NewsItem, Post, Keyword, Source
+from app.database import test_connection, get_session
 
 
 
@@ -14,7 +14,11 @@ router = APIRouter(
 
 @router.get("/health")
 async def health():
-    return {"status": "ok"}
+    result = await test_connection()
+    return {
+        "status": "ok",
+        "database": result
+    }
 
 
 @router.get("/sources")
