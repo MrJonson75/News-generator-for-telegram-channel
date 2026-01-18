@@ -294,3 +294,4 @@ pyrightconfig.json
 /alembic/script.py.mako
 /alembic/README
 /poetry.lock
+/aibot.db
