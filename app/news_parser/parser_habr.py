@@ -90,3 +90,14 @@ async def parse_news_habr_site() -> List[Dict]:
 
     logger.info(f"Успешно спарсено новостей: {len(news_items)}")
     return news_items
+
+# Тестовый запуск
+async def main():
+    news = await parse_news_habr_site()
+    for item in news:
+        print(item)
+
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
