@@ -3,9 +3,10 @@ from bs4 import BeautifulSoup
 from typing import List, Dict
 from app.logger import logger
 from app.news_parser.load_site import fetch_html
+from app.config import settings
 
 
-async def parse_news_habr_site(url: str) -> List[Dict]:
+async def parse_news_habr_site() -> List[Dict]:
     """
     Парсит новости с сайта habr.com и возвращает список словарей.
 
@@ -22,6 +23,7 @@ async def parse_news_habr_site(url: str) -> List[Dict]:
         ...
     ]
     """
+    url = settings.habr_url
     html = await fetch_html(url)
 
     if not html:

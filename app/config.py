@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     # Фильтры
     news_keywords: str = Field("python,fastapi,django", alias="NEWS_KEYWORDS")
 
+    # url для получения новостей
+    habr_url: str = "https://habr.com/ru/news/"
+
 
     @property
     def keywords_list(self) -> list[str]:
