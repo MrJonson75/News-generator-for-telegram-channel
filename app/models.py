@@ -83,9 +83,8 @@ class NewsItem(Base):
         return f"<NewsItem(title='{self.title[:30]}', source='{self.source}')>"
 
 
-# =========================
+
 # Модель поста
-# =========================
 class Post(Base):
     """
     Модель для хранения сгенерированных постов на основе новости.
@@ -121,9 +120,7 @@ class Post(Base):
         return f"<Post(news_id='{self.news_id}', status='{self.status.value}')>"
 
 
-# =========================
 # Модель источника новостей
-# =========================
 class Source(Base):
     """
     Модель для хранения источников новостей (сайты или Telegram-каналы).
@@ -151,18 +148,17 @@ class Source(Base):
     def validate_source_url(self, key, url):
         """Проверка корректности URL источника в зависимости от типа"""
         if self.type == SourceType.SITE and url and not url.startswith(('http://', 'https://')):
-            raise ValueError("Website URL must start with http:// or https://")
+            raise ValueError("URL-адрес веб-сайта должен начинаться с http:// or https://")
         elif self.type == SourceType.TELEGRAM and url and not url.startswith('@'):
-            raise ValueError("Telegram channel must start with @")
+            raise ValueError("Канал Telegram должен начинаться с @")
         return url
 
     def __repr__(self):
         return f"<Source(name='{self.name}', type='{self.type.value}')>"
 
 
-# =========================
+
 # Модель ключевого слова
-# =========================
 class Keyword(Base):
     """
     Модель для хранения ключевых слов (тегов) для фильтрации новостей.

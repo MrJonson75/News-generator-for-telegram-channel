@@ -1,53 +1,94 @@
+# app/logger.py
 import logging
 from logging.handlers import TimedRotatingFileHandler
+from pathlib import Path
 import os
+import time
 
-# Папка для хранения логов
-LOG_DIR = os.path.join(os.path.dirname(__file__), "../logs")
-os.makedirs(LOG_DIR, exist_ok=True)
 
-LOG_FILE = os.path.join(LOG_DIR, "project.log")
+BASE_DIR = Path(__file__).resolve().parent.parent
+LOG_DIR = BASE_DIR / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+
+LOG_FILE = LOG_DIR / "project.log"
+
+
+class SafeTimedRotatingFileHandler(TimedRotatingFileHandler):
+    """
+    TimedRotatingFileHandler, устойчивый к WinError 32.
+    Закрывает файл перед ротацией.
+    """
+
+    def doRollover(self):
+        if self.stream:
+            try:
+                self.stream.close()
+                self.stream = None
+            except Exception:
+                pass
+
+        current_time = int(time.time())
+        dfn = self.rotation_filename(
+            self.baseFilename + "." + time.strftime(self.suffix, time.localtime(current_time))
+        )
+
+        if not os.path.exists(dfn):
+            try:
+                os.rename(self.baseFilename, dfn)
+            except PermissionError:
+                # если Windows не дал переименовать — просто пропускаем
+                return
+
+        if self.backupCount > 0:
+            for s in self.getFilesToDelete():
+                try:
+                    os.remove(s)
+                except OSError:
+                    pass
+
+        if not self.delay:
+            self.stream = self._open()
 
 
 def setup_logger(name: str = "aibot") -> logging.Logger:
-    """
-    Настраивает централизованный логгер для проекта.
-
-    Логи пишутся и в файл, и в консоль.
-    Файлы логов меняются каждый день, сохраняются последние 7 дней.
-    """
     logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)  # Можно менять на DEBUG для разработки
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
-    if not logger.handlers:
-        # --- Файл логов с ротацией по дням ---
-        file_handler = TimedRotatingFileHandler(
-            filename=LOG_FILE,
-            when="midnight",  # ротация каждый день
-            interval=1,
-            backupCount=7,  # хранить последние 7 файлов
-            encoding="utf-8"
-        )
-        file_formatter = logging.Formatter(
-            "%(asctime)s | %(levelname)s | %(name)s | %(module)s:%(lineno)d | %(message)s"
-        )
-        file_handler.setFormatter(file_formatter)
-        file_handler.setLevel(logging.INFO)
+    if logger.handlers:
+        return logger
 
-        # --- Лог в консоль ---
-        console_handler = logging.StreamHandler()
-        console_formatter = logging.Formatter(
-            "%(asctime)s | %(levelname)s | %(message)s"
-        )
-        console_handler.setFormatter(console_formatter)
-        console_handler.setLevel(logging.INFO)
+    # --- Файл логов ---
+    file_handler = SafeTimedRotatingFileHandler(
+        filename=str(LOG_FILE),
+        when="midnight",
+        interval=1,
+        backupCount=7,
+        encoding="utf-8",
+        delay=True,
+        utc=False
+    )
 
-        # Добавляем обработчики
-        logger.addHandler(file_handler)
-        logger.addHandler(console_handler)
+    file_handler.suffix = "%Y-%m-%d"
+
+    file_formatter = logging.Formatter(
+        "%(asctime)s | %(levelname)s | %(name)s | %(module)s:%(lineno)d | %(message)s"
+    )
+    file_handler.setFormatter(file_formatter)
+    file_handler.setLevel(logging.INFO)
+
+    # --- Консоль ---
+    console_handler = logging.StreamHandler()
+    console_formatter = logging.Formatter(
+        "%(asctime)s | %(levelname)s | %(message)s"
+    )
+    console_handler.setFormatter(console_formatter)
+    console_handler.setLevel(logging.INFO)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
 
     return logger
 
 
-# Глобальный логгер для проекта
 logger = setup_logger()
