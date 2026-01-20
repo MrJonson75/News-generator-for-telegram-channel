@@ -296,3 +296,4 @@ pyrightconfig.json
 /poetry.lock
 /aibot.db
 /app/news_parser/telegram_parser_session.session
+/telegram_parser_session.session
