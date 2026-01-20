@@ -48,7 +48,7 @@ async def collect_news(limit_telegram: int = 50) -> List[Dict]:
     logger.info(f"После дедупликации: {len(unique_news)} новостей")
 
     # Фильтрация по ключевым словам
-    keywords = settings.news_keywords
+    keywords = settings.keywords_list
     if keywords:
         filtered_news = []
         for news in unique_news:
