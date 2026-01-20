@@ -11,18 +11,16 @@ async def parse_news_habr_site() -> List[Dict]:
     """
     Парсит новости с сайта habr.com и возвращает список словарей.
 
-    Возвращаемая структура:
-    [
-        {
-            "title": str,
-            "url": str,
-            "summary": str,
-            "source": "habr.com",
-            "published_at": str,
-            "keywords": List[str],
-        },
-        ...
-    ]
+    Формат словаря:
+    {
+        "title": str,
+        "url": str,
+        "summary": str,
+        "source": "habr.com",
+        "published_at": str,
+        "raw_text": str,
+        "keywords": List[str]  # пока пустой, заполнится позже
+    }
     """
     url = settings.habr_url
     html = await fetch_html(url)
@@ -42,31 +40,28 @@ async def parse_news_habr_site() -> List[Dict]:
     for item in articles:
         await random_delay(0.8, 2.5)
         try:
-            # --- Заголовок и ссылка ---
             title_tag = item.find("a", class_="tm-title__link")
             if not title_tag:
                 continue
 
             title = title_tag.get_text(strip=True)
             href = title_tag.get("href")
-
             if not title or not href or "/ru/news" not in href:
                 continue
 
             url_full = "https://habr.com" + href
 
-            # --- Краткое описание ---
             summary_tag = item.find("div", class_="article-formatted-body")
             if not summary_tag:
                 logger.debug("⚠️ Нет summary-блока у статьи Habr")
                 continue
 
-            summary = summary_tag.get_text(strip=True)
-            summary = summary[:500] + "..." if len(summary) > 500 else summary
-            if not summary:
+            full_text = summary_tag.get_text(strip=True)
+            if not full_text:
                 continue
 
-            # --- Дата публикации ---
+            summary = full_text[:500] + "..." if len(full_text) > 500 else full_text
+
             time_tag = item.find("time")
             published_at = time_tag.get("datetime") if time_tag else None
 
@@ -77,15 +72,17 @@ async def parse_news_habr_site() -> List[Dict]:
                     "summary": summary,
                     "source": "habr.com",
                     "published_at": published_at,
+                    "raw_text": full_text,
                 }
             )
 
-        except Exception as e:
+        except Exception:
             logger.exception("❌ Ошибка при разборе статьи Habr")
             continue
 
     logger.info(f"Успешно спарсено новостей: {len(news_items)}")
     return news_items
+
 
 # Тестовый запуск
 async def main():

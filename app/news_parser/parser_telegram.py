@@ -6,6 +6,13 @@ from app.logger import logger
 from app.utils.rate_limit import random_delay
 
 
+# app/news_parser/parser_telegram.py
+from telethon import TelegramClient
+from app.config import settings
+from app.logger import logger
+from app.utils.rate_limit import random_delay
+
+
 async def parse_telegram_channel(limit: int = 50):
     api_id = settings.telegram_api_id
     api_hash = settings.telegram_api_hash
@@ -31,16 +38,18 @@ async def parse_telegram_channel(limit: int = 50):
 
             news_items.append(
                 {
-                    "title": message.text.split("\n")[0][:200],
+                    "title": text.split("\n")[0][:200],
                     "url": f"https://t.me/{channel}/{message.id}",
-                    "summary": message.text[:500],
+                    "summary": text[:500],
                     "source": "telegram",
                     "published_at": message.date.isoformat() if message.date else None,
+                    "raw_text": text,  # полное сообщение
                 }
             )
 
     logger.info(f"Успешно спарсено сообщений Telegram: {len(news_items)}")
     return news_items
+
 
 
 

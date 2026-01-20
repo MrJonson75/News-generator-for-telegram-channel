@@ -33,6 +33,7 @@ pydantic-settings==2.12.0
 pydantic_core==2.41.5
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.1
+redis==5.0.1
 rsa==4.2
 six==1.17.0
 soupsieve==2.8.2
