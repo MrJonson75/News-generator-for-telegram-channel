@@ -1,8 +1,10 @@
 # app/config.py
+from pathlib import Path
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
+BASE_DIR = Path(__file__).resolve().parents[1]  # корень проекта
 
 class Contact(BaseModel):
     name: str
@@ -37,9 +39,8 @@ class Settings(BaseSettings):
     """
     Настройки приложения, загружаемые из переменных окружения и .env файла.
     """
-
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(BASE_DIR / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -62,6 +63,7 @@ class Settings(BaseSettings):
     # URL источников
     habr_url: str = "https://habr.com/ru/news/"
     rbc_url: str = "https://www.rbc.ru/rubric/technology_and_media?utm_source=topline"
+    telegram_news_channel: str = "hiaimedia"
 
     # Будущие настройки (пока не обязательные)
     redis_url: Optional[str] = Field(None, alias="REDIS_URL")

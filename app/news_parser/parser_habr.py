@@ -4,6 +4,7 @@ from typing import List, Dict
 from app.logger import logger
 from app.news_parser.load_site import fetch_html
 from app.config import settings
+from app.utils.rate_limit import random_delay
 
 
 async def parse_news_habr_site() -> List[Dict]:
@@ -39,6 +40,7 @@ async def parse_news_habr_site() -> List[Dict]:
     logger.info(f"Найдено статей: {len(articles)}")
 
     for item in articles:
+        await random_delay(0.8, 2.5)
         try:
             # --- Заголовок и ссылка ---
             title_tag = item.find("a", class_="tm-title__link")
@@ -56,22 +58,17 @@ async def parse_news_habr_site() -> List[Dict]:
             # --- Краткое описание ---
             summary_tag = item.find("div", class_="article-formatted-body")
             if not summary_tag:
+                logger.debug("⚠️ Нет summary-блока у статьи Habr")
                 continue
 
             summary = summary_tag.get_text(strip=True)
+            summary = summary[:500] + "..." if len(summary) > 500 else summary
             if not summary:
                 continue
 
             # --- Дата публикации ---
             time_tag = item.find("time")
             published_at = time_tag.get("datetime") if time_tag else None
-
-            # --- Ключевые слова (хабы) ---
-            keywords: List[str] = []
-            for key in item.select(".tm-publication-hub__link-container"):
-                keyword = key.get_text(strip=True).replace("*", "")
-                if keyword:
-                    keywords.append(keyword.lower())
 
             news_items.append(
                 {
@@ -80,7 +77,6 @@ async def parse_news_habr_site() -> List[Dict]:
                     "summary": summary,
                     "source": "habr.com",
                     "published_at": published_at,
-                    "keywords": keywords,
                 }
             )
 

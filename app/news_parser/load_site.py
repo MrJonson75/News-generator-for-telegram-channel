@@ -1,42 +1,45 @@
 # app/news_parser/load_site.py
 import httpx
 from app.logger import logger
+from app.utils.rate_limit import random_delay
 
 
-async def fetch_html(url: str) -> str:
-    """
-    Асинхронно загружает HTML-страницу по URL.
+async def fetch_html(url: str, retries: int = 3) -> str:
+    """Загружает HTML-страницу с указанного URL с повторением при ошибках."""
+    for attempt in range(1, retries + 1):
+        try:
+            # Пауза между попытками
+            await random_delay(1.5, 4.0)
 
-    Возвращает:
-        str: HTML-текст страницы или пустую строку при 404.
+            logger.info(f"🌐 Загрузка страницы: {url} (попытка {attempt})")
+            # Отправка запроса с таймаутом 15 секунд
+            async with httpx.AsyncClient(timeout=15) as client:
+                response = await client.get(url)
+                response.raise_for_status()
+                return response.text
 
-    Исключения:
-        httpx.RequestError: при сетевых ошибках (DNS, таймаут и т.п.)
-        httpx.HTTPStatusError: при HTTP-ошибках кроме 404
-    """
-    logger.info(f"Загрузка страницы: {url}")
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
 
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            return response.text
+            if status == 404:
+                logger.error(f"❌ Страница не найдена: {url}")
+                return ""
 
-    except httpx.HTTPStatusError as e:
-        # Есть HTTP-ответ (4xx / 5xx)
-        status_code = e.response.status_code
+            if status in (429, 500, 502, 503):
+                logger.warning(
+                    f"⚠️ HTTP {status} для {url}, повтор через паузу"
+                )
+                # Пауза между повторными попытками
+                await random_delay(5, 12)
+                continue
 
-        if status_code == 404:
-            logger.warning(f"Страница не найдена (404): {url}")
-            return ""
+            logger.exception(f"❌ HTTP ошибка при загрузке {url}")
+            raise
 
-        logger.error(
-            f"HTTP ошибка при загрузке {url}: "
-            f"{status_code} {e.response.reason_phrase}"
-        )
-        raise
+        except httpx.RequestError:
+            logger.warning(f"⚠️ Сетевая ошибка при загрузке {url}")
+            await random_delay(5, 10)
+            continue
 
-    except httpx.RequestError as e:
-        # Ошибки соединения, таймауты, DNS и т.п.
-        logger.error(f"Сетевая ошибка при загрузке {url}: {e}")
-        raise
+    logger.error(f"❌ Не удалось загрузить страницу после {retries} попыток: {url}")
+    return ""

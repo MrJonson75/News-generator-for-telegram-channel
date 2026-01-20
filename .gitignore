@@ -295,3 +295,4 @@ pyrightconfig.json
 /alembic/README
 /poetry.lock
 /aibot.db
+/app/news_parser/telegram_parser_session.session

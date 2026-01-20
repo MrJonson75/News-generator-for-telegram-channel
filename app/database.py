@@ -57,7 +57,7 @@ async def test_connection():
             return f"✅ Database connection OK: {value}"
     except Exception as e:
         logger.exception(f"❌ Database connection failed: {e}")
-        return f"❌ Database connection failed: {e}"
+        return f"❌ Database connection failed"
 
 
 
