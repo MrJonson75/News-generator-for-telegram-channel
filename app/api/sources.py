@@ -1,6 +1,6 @@
 # app/api/sources.py
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -27,17 +27,36 @@ router = APIRouter(prefix="/api", tags=["posts"])
 #======================================================
 @router.get("/posts", response_model=list[PostSchema])
 async def get_posts(
-    status: Optional[PostStatus] = Query(None, description="Фильтр по статусу поста"),
-    page: int = Query(1, ge=1, description="Номер страницы"),
-    size: int = Query(20, ge=1, le=100, description="Размер страницы"),
+    status: Optional[PostStatus] = Query(
+        None,
+        description="Фильтр по статусу поста",
+        examples={
+            "new": {"summary": "Новые посты", "value": "new"},
+            "generated": {"summary": "Сгенерированные посты", "value": "generated"},
+        }
+    ),
+    page: int = Query(
+        1,
+        ge=1,
+        description="Номер страницы",
+        examples={"example": {"summary": "Первая страница", "value": 1}}
+    ),
+    size: int = Query(
+        20,
+        ge=1,
+        le=100,
+        description="Количество постов на странице",
+        examples={"example": {"summary": "Размер страницы", "value": 20}}
+    ),
     session: AsyncSession = Depends(get_session)
 ):
     """
-    Получение списка постов.
+    Получение списка постов с фильтром и пагинацией.
 
-    Можно:
-    - фильтровать по статусу (?status=new)
-    - использовать пагинацию (?page=1&size=20)
+    **Примеры запросов:**
+    - `/api/posts` — все посты
+    - `/api/posts?status=new` — только новые посты
+    - `/api/posts?page=2&size=10` — вторая страница, по 10 постов
     """
     try:
         stmt = select(Post).options(selectinload(Post.keywords))
@@ -45,18 +64,12 @@ async def get_posts(
         if status:
             stmt = stmt.where(Post.status == status)
 
-        stmt = (
-            stmt.order_by(Post.created_at.desc())
-            .offset((page - 1) * size)
-            .limit(size)
-        )
-
+        stmt = stmt.order_by(Post.created_at.desc()).offset((page - 1) * size).limit(size)
         result = await session.execute(stmt)
         return result.scalars().all()
-
     except Exception:
         logger.exception("❌ Ошибка получения постов")
-        raise HTTPException(500, "Failed to fetch posts")
+        raise HTTPException(500, "Не удалось получить посты")
 
 
 #======================================================
@@ -66,23 +79,23 @@ async def get_posts(
 async def get_post(post_id: UUID, session: AsyncSession = Depends(get_session)):
     """
     Получение одного поста по ID.
+
+    **Пример запроса:**
+    `/api/posts/9250e8ec-9ebf-41bb-a5d7-9287a5380024`
     """
     try:
         result = await session.execute(
-            select(Post)
-            .options(selectinload(Post.keywords))
-            .where(Post.id == str(post_id))
+            select(Post).options(selectinload(Post.keywords)).where(Post.id == str(post_id))
         )
         post = result.scalar_one_or_none()
         if not post:
-            raise HTTPException(404, "Post not found")
+            raise HTTPException(404, "Пост не найден")
         return post
-
     except HTTPException:
         raise
     except Exception:
         logger.exception(f"❌ Ошибка получения поста {post_id}")
-        raise HTTPException(500, "Failed to fetch post")
+        raise HTTPException(500, "Не удалось получить пост")
 
 
 #======================================================
@@ -96,18 +109,23 @@ async def update_post_status(
 ):
     """
     Ручное изменение статуса поста.
+    Доступные статусы: `new`, `generated`, `published`, `failed`.
+
+    **Пример запроса:**
+    ```json
+    {
+      "status": "published"
+    }
+    ```
+
     """
     try:
-
         result = await session.execute(
-            select(Post)
-            .options(selectinload(Post.keywords))
-            .where(Post.id == str(post_id))
+            select(Post).options(selectinload(Post.keywords)).where(Post.id == str(post_id))
         )
         post = result.scalar_one_or_none()
-
         if not post:
-            raise HTTPException(404, "Post not found")
+            raise HTTPException(404, "Пост не найден")
 
         old_status = post.status
         post.status = payload.status
@@ -117,12 +135,11 @@ async def update_post_status(
 
         logger.info(f"🔄 Статус поста {post_id}: {old_status} → {payload.status}")
         return post
-
     except HTTPException:
         raise
     except Exception:
         logger.exception(f"❌ Ошибка смены статуса поста {post_id}")
-        raise HTTPException(500, "Failed to update status")
+        raise HTTPException(500, "Не удалось изменить статус")
 
 
 #======================================================
@@ -132,38 +149,40 @@ async def update_post_status(
 async def delete_post(post_id: UUID, session: AsyncSession = Depends(get_session)):
     """
     Удаление поста по ID.
+
+    **Пример запроса:**
+    `/api/posts/9250e8ec-9ebf-41bb-a5d7-9287a5380024`
     """
     try:
         result = await session.execute(
-            select(Post)
-            .options(selectinload(Post.keywords))
-            .where(Post.id == str(post_id))
+            select(Post).options(selectinload(Post.keywords)).where(Post.id == str(post_id))
         )
         post = result.scalar_one_or_none()
-
         if not post:
-            raise HTTPException(404, "Post not found")
+            raise HTTPException(404, "Пост не найден")
 
         await session.delete(post)
         await session.commit()
 
         logger.warning(f"🗑 Пост удалён: {post_id}")
-        return {"status": "ok", "detail": "Post deleted"}
-
+        return {"status": "ok", "detail": "Пост удалён"}
     except HTTPException:
         raise
     except Exception:
         logger.exception(f"❌ Ошибка удаления поста {post_id}")
-        raise HTTPException(500, "Failed to delete post")
+        raise HTTPException(500, "Не удалось удалить пост")
 
 
-#=======================================================
+#======================================================
 # Генерация постов вручную
-#=======================================================
+#======================================================
 @router.post("/generate", response_model=GenerateResponseSchema)
 async def generate_posts_manual():
     """
     Ручной запуск генерации постов через Celery.
+
+    **Пример запроса:**
+    POST `/api/generate`
     """
     try:
         task = celery_app.send_task("generate_posts")
@@ -171,7 +190,7 @@ async def generate_posts_manual():
         return {"status": "started", "generated_count": 0}
     except Exception:
         logger.exception("❌ Ошибка ручного запуска генерации")
-        raise HTTPException(500, "Failed to start generation")
+        raise HTTPException(500, "Не удалось запустить генерацию")
 
 
 #======================================================
@@ -182,22 +201,22 @@ async def publish_post(post_id: UUID, session: AsyncSession = Depends(get_sessio
     """
     Публикация поста в Telegram.
 
-    Меняет статус поста на published.
+    Меняет статус поста на `published`.
     В будущем сюда можно подключить реальную отправку в Telegram.
+
+    **Пример запроса:**
+    POST `/api/posts/9250e8ec-9ebf-41bb-a5d7-9287a5380024/publish`
     """
     try:
         result = await session.execute(
-            select(Post)
-            .options(selectinload(Post.keywords))
-            .where(Post.id == str(post_id))
+            select(Post).options(selectinload(Post.keywords)).where(Post.id == str(post_id))
         )
         post = result.scalar_one_or_none()
-
         if not post:
-            raise HTTPException(404, "Post not found")
+            raise HTTPException(404, "Пост не найден")
 
         if post.status != PostStatus.generated:
-            raise HTTPException(400, "Post must be in 'generated' status to publish")
+            raise HTTPException(400, "Пост должен быть в статусе 'generated' для публикации")
 
         post.status = PostStatus.published
 
@@ -206,10 +225,8 @@ async def publish_post(post_id: UUID, session: AsyncSession = Depends(get_sessio
 
         logger.info(f"📢 Пост опубликован: {post_id}")
         return post
-
     except HTTPException:
         raise
     except Exception:
         logger.exception(f"❌ Ошибка публикации поста {post_id}")
-        raise HTTPException(500, "Failed to publish post")
-
+        raise HTTPException(500, "Не удалось опубликовать пост")
