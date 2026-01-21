@@ -14,18 +14,18 @@ from app.api.schemas import (
     PostStatusUpdateSchema,
     DeleteResponseSchema,
     GenerateResponseSchema,
+    PostStatus
 )
 from app.celery_app import celery_app
 from app.logger import logger
-from app.api.schemas import PostStatus
 
 router = APIRouter(prefix="/api", tags=["posts"])
 
 
-#======================================================
+# ======================================================
 # Получение всех постов
-#======================================================
-@router.get("/posts", response_model=list[PostSchema])
+# ======================================================
+@router.get("/posts", response_model=list[PostSchema], summary="Получить список постов")
 async def get_posts(
     status: Optional[PostStatus] = Query(
         None,
@@ -33,6 +33,8 @@ async def get_posts(
         examples={
             "new": {"summary": "Новые посты", "value": "new"},
             "generated": {"summary": "Сгенерированные посты", "value": "generated"},
+            "published": {"summary": "Опубликованные посты", "value": "published"},
+            "failed": {"summary": "С ошибкой", "value": "failed"}
         }
     ),
     page: int = Query(
@@ -60,10 +62,8 @@ async def get_posts(
     """
     try:
         stmt = select(Post).options(selectinload(Post.keywords))
-
         if status:
             stmt = stmt.where(Post.status == status)
-
         stmt = stmt.order_by(Post.created_at.desc()).offset((page - 1) * size).limit(size)
         result = await session.execute(stmt)
         return result.scalars().all()
@@ -72,10 +72,10 @@ async def get_posts(
         raise HTTPException(500, "Не удалось получить посты")
 
 
-#======================================================
+# ======================================================
 # Получение поста по ID
-#======================================================
-@router.get("/posts/{post_id}", response_model=PostSchema)
+# ======================================================
+@router.get("/posts/{post_id}", response_model=PostSchema, summary="Получить пост по ID")
 async def get_post(post_id: UUID, session: AsyncSession = Depends(get_session)):
     """
     Получение одного поста по ID.
@@ -98,10 +98,10 @@ async def get_post(post_id: UUID, session: AsyncSession = Depends(get_session)):
         raise HTTPException(500, "Не удалось получить пост")
 
 
-#======================================================
+# ======================================================
 # Изменение статуса поста
-#======================================================
-@router.patch("/posts/{post_id}/status", response_model=PostSchema)
+# ======================================================
+@router.patch("/posts/{post_id}/status", response_model=PostSchema, summary="Изменить статус поста")
 async def update_post_status(
     post_id: UUID,
     payload: PostStatusUpdateSchema,
@@ -109,7 +109,12 @@ async def update_post_status(
 ):
     """
     Ручное изменение статуса поста.
-    Доступные статусы: `new`, `generated`, `published`, `failed`.
+
+    **Доступные статусы:**
+    - `new` — новый пост
+    - `generated` — отправить в генерацию
+    - `published` — опубликован
+    - `failed` — ошибка генерации
 
     **Пример запроса:**
     ```json
@@ -117,7 +122,6 @@ async def update_post_status(
       "status": "published"
     }
     ```
-
     """
     try:
         result = await session.execute(
@@ -142,10 +146,10 @@ async def update_post_status(
         raise HTTPException(500, "Не удалось изменить статус")
 
 
-#======================================================
+# ======================================================
 # Удаление поста
-#======================================================
-@router.delete("/posts/{post_id}", response_model=DeleteResponseSchema)
+# ======================================================
+@router.delete("/posts/{post_id}", response_model=DeleteResponseSchema, summary="Удалить пост")
 async def delete_post(post_id: UUID, session: AsyncSession = Depends(get_session)):
     """
     Удаление поста по ID.
@@ -173,10 +177,10 @@ async def delete_post(post_id: UUID, session: AsyncSession = Depends(get_session
         raise HTTPException(500, "Не удалось удалить пост")
 
 
-#======================================================
+# ======================================================
 # Генерация постов вручную
-#======================================================
-@router.post("/generate", response_model=GenerateResponseSchema)
+# ======================================================
+@router.post("/generate", response_model=GenerateResponseSchema, summary="Запустить генерацию")
 async def generate_posts_manual():
     """
     Ручной запуск генерации постов через Celery.
@@ -193,10 +197,10 @@ async def generate_posts_manual():
         raise HTTPException(500, "Не удалось запустить генерацию")
 
 
-#======================================================
+# ======================================================
 # Публикация поста в Telegram
-#======================================================
-@router.post("/posts/{post_id}/publish", response_model=PostSchema)
+# ======================================================
+@router.post("/posts/{post_id}/publish", response_model=PostSchema, summary="Опубликовать пост")
 async def publish_post(post_id: UUID, session: AsyncSession = Depends(get_session)):
     """
     Публикация поста в Telegram.
