@@ -5,16 +5,14 @@ from typing import List
 from app.logger import logger
 from app.config import settings
 from app.news_parser import parser_habr, parser_rbk, parser_telegram
-from app.api.schemas import ParsedNewsSchema, SourceType
+from app.api.schemas import ParsedNewsSchema
 
 
 async def collect_news(limit_telegram: int = 50) -> List[ParsedNewsSchema]:
     """
     Сбор и валидация новостей с Habr, RBK и Telegram.
-
-    :param limit_telegram: сколько сообщений Telegram парсить
-    :return: список валидированных ParsedNewsSchema
     """
+
     logger.info("🚀 Старт сбора новостей со всех источников")
 
     tasks = [
@@ -51,9 +49,9 @@ async def collect_news(limit_telegram: int = 50) -> List[ParsedNewsSchema]:
     # Дедупликация по URL
     # =========================
     seen_urls = set()
-    unique_news = []
+    unique_news: List[ParsedNewsSchema] = []
     for news in validated_news:
-        if not news.url or news.url in seen_urls:
+        if news.url in seen_urls:
             continue
         seen_urls.add(news.url)
         unique_news.append(news)
@@ -68,7 +66,7 @@ async def collect_news(limit_telegram: int = 50) -> List[ParsedNewsSchema]:
         filtered_news = []
         for news in unique_news:
             text = f"{news.title} {news.summary}".lower()
-            if any(word in text for word in keywords):
+            if any(word.lower() in text for word in keywords):
                 filtered_news.append(news)
         logger.info(f"После фильтрации по ключевым словам: {len(filtered_news)} новостей")
     else:
@@ -83,18 +81,3 @@ async def collect_news(limit_telegram: int = 50) -> List[ParsedNewsSchema]:
     )
 
     return filtered_news
-
-
-# =========================
-# Тестовый запуск
-# =========================
-async def main():
-    news = await collect_news(limit_telegram=20)
-    for idx, item in enumerate(news, 1):
-        print(f"{idx}. [{item.source} | {item.source_type}] {item.title} ({item.published_at})")
-        print(f"   {item.url}\n")
-        print(f"Кратко: {item.summary}\n")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

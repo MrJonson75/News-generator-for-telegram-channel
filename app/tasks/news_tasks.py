@@ -1,6 +1,5 @@
 # app/tasks/news_tasks.py
 import asyncio
-from datetime import datetime
 from app.celery_app import celery_app
 from sqlalchemy import select
 from app.database import async_session
@@ -19,46 +18,43 @@ def parse_and_save_news(limit_telegram: int = 50):
 
         async with async_session() as session:
             saved_count = 0
+
             for news in news_list:
-                source_name = news.get("source")
-                source_url = news.get("url")
+                # news теперь ParsedNewsSchema, а не dict
 
                 # --- Получаем или создаём Source ---
-                result = await session.execute(select(Source).where(Source.name == source_name))
-                source_obj = result.scalar()
+                result = await session.execute(
+                    select(Source).where(Source.name == news.source)
+                )
+                source_obj = result.scalar_one_or_none()
+
                 if not source_obj:
-                    # Определяем тип источника
-                    source_type = "tg" if source_name.lower() == "telegram" else "site"
-                    source_obj = Source(name=source_name, type=source_type, url=source_url)
+                    source_obj = Source(
+                        name=news.source,
+                        type=news.source_type.value,  # site / tg
+                        url=news.source_url,
+                    )
                     session.add(source_obj)
-                    await session.commit()
-                    await session.refresh(source_obj)
+                    await session.flush()  # без commit внутри цикла!
 
                 # --- Проверка дубликата по URL ---
-                news_url = news.get("url")
-                result = await session.execute(select(NewsItem).where(NewsItem.url == news_url))
-                existing_news = result.scalar()
+                result = await session.execute(
+                    select(NewsItem).where(NewsItem.url == str(news.url))
+                )
+                existing_news = result.scalar_one_or_none()
                 if existing_news:
                     continue
 
-                # --- Конвертация published_at в datetime ---
-                published_at = None
-                published_str = news.get("published_at")
-                if published_str:
-                    try:
-                        published_at = datetime.fromisoformat(published_str)
-                    except ValueError:
-                        logger.warning(f"⚠️ Невалидная дата публикации: {published_str}")
-
                 # --- Создание NewsItem ---
                 news_obj = NewsItem(
-                    title=news.get("title") or "Без заголовка",
-                    url=news_url,
-                    summary=news.get("summary") or "",
+                    title=news.title or "Без заголовка",
+                    url=str(news.url),
+                    summary=news.summary or "",
                     source_id=source_obj.id,
-                    published_at=published_at,
-                    raw_text=news.get("raw_text"),
+                    published_at=news.published_at,
+                    raw_text=news.raw_text,
                 )
+
                 session.add(news_obj)
                 saved_count += 1
 
