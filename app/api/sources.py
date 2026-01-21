@@ -98,7 +98,12 @@ async def update_post_status(
     Ручное изменение статуса поста.
     """
     try:
-        result = await session.execute(select(Post).where(Post.id == str(post_id)))
+
+        result = await session.execute(
+            select(Post)
+            .options(selectinload(Post.keywords))
+            .where(Post.id == str(post_id))
+        )
         post = result.scalar_one_or_none()
 
         if not post:
@@ -129,7 +134,11 @@ async def delete_post(post_id: UUID, session: AsyncSession = Depends(get_session
     Удаление поста по ID.
     """
     try:
-        result = await session.execute(select(Post).where(Post.id == str(post_id)))
+        result = await session.execute(
+            select(Post)
+            .options(selectinload(Post.keywords))
+            .where(Post.id == str(post_id))
+        )
         post = result.scalar_one_or_none()
 
         if not post:
@@ -177,7 +186,11 @@ async def publish_post(post_id: UUID, session: AsyncSession = Depends(get_sessio
     В будущем сюда можно подключить реальную отправку в Telegram.
     """
     try:
-        result = await session.execute(select(Post).where(Post.id == str(post_id)))
+        result = await session.execute(
+            select(Post)
+            .options(selectinload(Post.keywords))
+            .where(Post.id == str(post_id))
+        )
         post = result.scalar_one_or_none()
 
         if not post:
