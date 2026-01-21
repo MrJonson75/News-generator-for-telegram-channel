@@ -3,9 +3,6 @@ REM ============================================
 REM Run Celery worker for Generator_post_for_telegramm on Windows
 REM ============================================
 
-REM Активируем виртуальное окружение
-call .venv\Scripts\activate.bat
-
 REM Устанавливаем переменную окружения для Windows (если нужно)
 REM set PYTHONPATH=%CD%
 

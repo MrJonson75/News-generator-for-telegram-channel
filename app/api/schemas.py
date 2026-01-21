@@ -1,149 +1,110 @@
+# app/api/schemas.py
 from pydantic import BaseModel, Field, AnyHttpUrl
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 from uuid import UUID
+from enum import Enum
 
 
-# Модель данных для новости
-class NewsItem(BaseModel):
-    """
-    Схема данных для представления одной новости.
-
-    Используется для валидации и документирования входящих/исходящих данных,
-    связанных с новостями из внешних источников.
-    """
-
-    news_id: UUID = Field(
-        ...,
-        description="Уникальный идентификатор новости в формате UUID или хеша",
-        examples=["123e4567-e89b-12d3-a456-426614174000"]
-    )
-    title: str = Field(
-        ...,
-        min_length=3,
-        max_length=100,
-        description="Заголовок новости",
-        examples=["Вышла новая версия Django", "Что вышло нового за декабрь 2025 года."]
-    )
-    url: AnyHttpUrl = Field(
-        ...,
-        description="URL оригинальной статьи",
-        examples=["https://news.yandex.ru"]
-    )
-    summary: str = Field(
-        default=None,
-        description="Краткое содержание новости. Может отсутствовать.",
-        examples=["Вышла новая версия Django 5.0 с поддержкой асинхронных миграций.", "За декабрь 2025 года представлено несколько обновлений в экосистеме Python."]
-    )
-    source: str = Field(
-        ...,
-        min_length=2,
-        max_length=100,
-        description="Источник новости (например, название сайта или платформы)",
-        examples=["Telegram", "Habr", "VC.ru", "Lenta.ru"]
-    )
-    published_at: datetime = Field(
-        ...,
-        description="Дата и время публикации новости в формате ISO 8601",
-        examples=["2025-02-20T10:30:00Z", "2025-02-19T14:15:30+03:00"]
-    )
-    keywords: List[str] = Field(
-        default_factory=list,
-        description="Список ключевых слов или тегов, связанных с новостью. Может быть пустым.",
-        examples=[["Python", "Django", "Web development"], ["новости", "технологии", "IT"]]
-    )
+# =========================
+# Enum под Source.type
+# =========================
+class SourceType(str, Enum):
+    site = "site"
+    tg = "tg"
 
 
-class Post(BaseModel):
-    """
-    Схема данных для поста, сгенерированного на основе новости.
-
-    Представляет запись в базе данных, связанную с обработанной новостью.
-    Содержит статус публикации и сгенерированный текст.
-    """
-
-    id: int = Field(
-        ...,
-        description="Первичный ключ записи в базе данных",
-        examples=[1, 42]
-    )
-    news_id: str = Field(
-        ...,
-        description="Идентификатор связанной новости",
-        examples=["123e4567-e89b-12d3-a456-426614174000"]
-    )
-    generated_text: str = Field(
-        ...,
-        description="Сгенерированный текст публикации",
-        examples=["Сегодня вышла новая версия Django 5.0 с поддержкой асинхронных миграций."]
-    )
-    published_at: datetime = Field(
-        default=None,
-        description="Дата и время публикации поста в формате ISO 8601. Может быть не задано.",
-        examples=["2025-02-20T12:00:00Z"]
-    )
-    status: str = Field(
-        ...,
-        pattern="^(new|generated|published|failed)$",
-        description="Статус поста: new — создан, generated — текст сгенерирован, published — опубликован, failed — ошибка",
-        examples=["new", "published", "failed"]
-    )
+# =========================
+# Enum под Post.status
+# =========================
+class PostStatus(str, Enum):
+    new = "new"
+    generated = "generated"
+    published = "published"
+    failed = "failed"
 
 
-class Keyword(BaseModel):
-    """
-    Схема данных для ключевого слова.
+# =========================
+# Схема источника
+# =========================
+class SourceSchema(BaseModel):
+    id: UUID = Field(..., description="UUID источника")
+    type: SourceType = Field(..., description="Тип источника: site / tg")
+    name: str = Field(..., min_length=1, max_length=100)
+    url: Optional[str] = Field(None, description="URL сайта или ссылка на TG")
+    enabled: bool = Field(True)
 
-    Используется для управления тегами, связанными с новостями.
-    """
+    created_at: Optional[datetime] = None
 
-    id: int = Field(
-        ...,
-        description="Первичный ключ записи в базе данных",
-        examples=[1, 2]
-    )
-    word: str = Field(
-        ...,
-        min_length=1,
-        max_length=50,
-        description="Ключевое слово или тег",
-        examples=["Python", "Django", "Web development"]
-    )
+    class Config:
+        from_attributes = True
 
 
-class Source(BaseModel):
-    """
-    Схема данных для источника новостей.
+# =========================
+# Схема новости (под БД)
+# =========================
+class NewsItemSchema(BaseModel):
+    id: UUID = Field(..., description="UUID новости")
+    title: str = Field(..., min_length=3, max_length=300)
+    url: Optional[AnyHttpUrl]
+    summary: str
+    published_at: Optional[datetime]
+    raw_text: Optional[str]
 
-    Поддерживает два типа источников: веб-сайты и Telegram-каналы.
-    Используется для настройки парсинга и фильтрации новостей.
-    """
+    source_id: UUID
+    created_at: Optional[datetime]
 
-    id: int = Field(
-        ...,
-        description="Первичный ключ записи в базе данных",
-        examples=[1, 2]
-    )
-    type: str = Field(
-        ...,
-        pattern="^(site|tg)$",
-        description="Тип источника: site — веб-сайт, tg — Telegram канал",
-        examples=["site", "tg"]
-    )
-    name: str = Field(
-        ...,
-        min_length=1,
-        max_length=100,
-        description="Название источника (например, название сайта или Telegram канала)",
-        examples=["Habr", "VC.ru", "Python News TG"]
-    )
-    url: str = Field(
-        ...,
-        description="Ссылка на сайт или username Telegram-канала (без @)",
-        examples=["https://habr.com", "python_news"]
-    )
-    enabled: bool = Field(
-        ...,
-        description="Флаг активности источника: True — активен, False — отключен",
-        examples=[True, False]
-    )
+    class Config:
+        from_attributes = True
+
+
+# =========================
+# Входная схема для news_collector
+# (до сохранения в БД)
+# =========================
+class ParsedNewsSchema(BaseModel):
+    title: str = Field(..., min_length=3, max_length=300)
+    url: Optional[AnyHttpUrl]
+    summary: str
+    published_at: Optional[datetime]
+    raw_text: Optional[str]
+
+    source: str = Field(..., description="Имя источника")
+    source_type: SourceType = Field(..., description="site / tg")
+    source_url: Optional[str]
+
+    class Config:
+        extra = "forbid"  # запрещает лишние поля
+
+
+# =========================
+# Ключевое слово
+# =========================
+class KeywordSchema(BaseModel):
+    id: UUID
+    word: str = Field(..., min_length=1, max_length=50)
+    created_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+# =========================
+# Пост
+# =========================
+class PostSchema(BaseModel):
+    id: UUID
+    news_id: UUID
+
+    generated_text: Optional[str]
+    published_at: Optional[datetime]
+
+    status: PostStatus
+    retry_count: int
+    error_message: Optional[str]
+    created_at: Optional[datetime]
+
+    keywords: List[KeywordSchema] = []
+
+    class Config:
+        from_attributes = True

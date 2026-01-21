@@ -27,7 +27,9 @@ def parse_and_save_news(limit_telegram: int = 50):
                 result = await session.execute(select(Source).where(Source.name == source_name))
                 source_obj = result.scalar()
                 if not source_obj:
-                    source_obj = Source(name=source_name, type="site", url=source_url)
+                    # Определяем тип источника
+                    source_type = "tg" if source_name.lower() == "telegram" else "site"
+                    source_obj = Source(name=source_name, type=source_type, url=source_url)
                     session.add(source_obj)
                     await session.commit()
                     await session.refresh(source_obj)
