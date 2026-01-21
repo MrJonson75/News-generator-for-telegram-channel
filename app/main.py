@@ -14,7 +14,8 @@ from app.ai.openai_client import openai_client
 from app.logger import logger
 from app.celery_app import celery_app
 import redis.asyncio as redis
-import asyncio
+from fastapi import status as http_status
+
 
 # =====================================================
 # Инициализация FastAPI
@@ -149,3 +150,58 @@ async def startup_event():
         logger.info(f"OpenAI client ready: {openai_status}")
     except Exception as e:
         logger.error(f"OpenAI client error: {e}")
+
+
+
+# =====================================================
+# Health-check Celery + Beat
+# =====================================================
+@app.get(
+    "/health/celery",
+    tags=["main"],
+    summary="Проверка состояния Celery",
+    response_model=dict
+)
+async def health_celery():
+    """
+    Проверка состояния Celery и очередей.
+
+    **Возвращает:**
+    - `status` — общее состояние воркеров
+    - `workers` — список доступных воркеров
+    - `active` — активные задачи
+    - `scheduled` — отложенные задачи (таймеры)
+    - `reserved` — задачи в очереди
+    """
+    try:
+        inspect = celery_app.control.inspect(timeout=2)
+        active = inspect.active() or {}
+        scheduled = inspect.scheduled() or {}
+        reserved = inspect.reserved() or {}
+        stats = inspect.stats() or {}
+
+        if not stats:
+            return {
+                "status": "fail",
+                "detail": "Нет доступных воркеров Celery"
+            }
+
+        worker_names = list(stats.keys())
+
+        response = {
+            "status": "ok",
+            "workers": worker_names,
+            "active_tasks": active,
+            "scheduled_tasks": scheduled,
+            "reserved_tasks": reserved
+        }
+
+        logger.info(f"Celery health-check: {response}")
+        return response
+
+    except Exception as e:
+        logger.exception("❌ Ошибка проверки Celery")
+        return JSONResponse(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"status": "fail", "detail": str(e)}
+        )
