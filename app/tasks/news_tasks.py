@@ -19,23 +19,26 @@ def parse_and_save_news(limit_telegram: int = 50):
         async with async_session() as session:
             saved_count = 0
 
+            # Получаем все источники заранее
+            result = await session.execute(select(Source))
+            sources = result.scalars().all()
+            sources_dict = {src.name: src for src in sources}
+
             for news in news_list:
-                # news теперь ParsedNewsSchema, а не dict
+                source_name = news.source
 
                 # --- Получаем или создаём Source ---
-                result = await session.execute(
-                    select(Source).where(Source.name == news.source)
-                )
-                source_obj = result.scalar_one_or_none()
-
+                source_obj = sources_dict.get(source_name)
                 if not source_obj:
                     source_obj = Source(
                         name=news.source,
                         type=news.source_type.value,
                         url=news.source_url,
+                        enabled=True  # новые источники сразу активны
                     )
                     session.add(source_obj)
                     await session.flush()
+                    sources_dict[source_name] = source_obj
                     logger.info(f"🆕 Создан новый источник: {source_obj.name} ({source_obj.type})")
 
                 # --- Проверка дубликата по URL ---

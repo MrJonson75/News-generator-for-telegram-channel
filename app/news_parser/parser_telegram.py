@@ -10,32 +10,20 @@ from app.logger import logger
 from app.utils.rate_limit import random_delay
 
 
-async def parse_telegram_channel(limit: int = 50) -> List[Dict]:
+async def parse_telegram_channel(limit: int = 50, channel: str = None) -> List[Dict]:
     """
     Парсинг новостей из Telegram-канала.
-    Возвращает данные в унифицированном формате для ParsedNewsSchema:
-
-    {
-        "title": str,
-        "url": str,
-        "summary": str,
-        "published_at": datetime | None,
-        "raw_text": str,
-        "source": str,
-        "source_type": "tg",
-        "source_url": str
-    }
+    Поддерживает динамическое указание канала через аргумент channel.
     """
-    api_id = settings.telegram_api_id
-    api_hash = settings.telegram_api_hash
-    channel = settings.telegram_news_channel
-
-    if not api_id or not api_hash:
-        logger.error("❌ Не заданы TELEGRAM_API_ID или TELEGRAM_API_HASH")
+    channel = channel or settings.telegram_news_channel
+    if not channel:
+        logger.error("❌ Не задан канал Telegram для парсинга")
         return []
 
-    if not channel:
-        logger.error("❌ Не задан TELEGRAM_NEWS_CHANNEL")
+    api_id = settings.telegram_api_id
+    api_hash = settings.telegram_api_hash
+    if not api_id or not api_hash:
+        logger.error("❌ Не заданы TELEGRAM_API_ID или TELEGRAM_API_HASH")
         return []
 
     news_items: List[Dict] = []
@@ -45,24 +33,16 @@ async def parse_telegram_channel(limit: int = 50) -> List[Dict]:
 
         try:
             async for message in client.iter_messages(channel, limit=min(limit, 60)):
-                await random_delay(1.0, 2.5)  # защита от flood wait
+                await random_delay(1.0, 2.5)
 
-                if not message.text:
+                if not message.text or len(message.text.strip()) < 30:
                     continue
 
                 text = message.text.strip()
-                if len(text) < 30:
-                    continue
-
                 title = text.split("\n")[0][:200]
                 summary = text[:500]
 
-                published_at = None
-                if message.date:
-                    try:
-                        published_at = message.date
-                    except Exception:
-                        logger.warning(f"⚠️ Ошибка преобразования даты сообщения {message.id}")
+                published_at = message.date if message.date else None
 
                 news_items.append(
                     {
@@ -76,6 +56,7 @@ async def parse_telegram_channel(limit: int = 50) -> List[Dict]:
                         "source_url": f"https://t.me/{channel}",
                     }
                 )
+
         except FloodWaitError as e:
             logger.warning(f"⏱ Телеграм просит ждать {e.seconds} секунд")
         except Exception as e:
@@ -85,15 +66,3 @@ async def parse_telegram_channel(limit: int = 50) -> List[Dict]:
     return news_items
 
 
-# =========================
-# Тестовый запуск
-# =========================
-async def main():
-    news = await parse_telegram_channel(limit=10)
-    for item in news:
-        print(item)
-
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())

@@ -1,5 +1,5 @@
-# app/celery_app.py
 from celery import Celery
+from datetime import timedelta
 from app.config import settings
 
 celery_app = Celery(
@@ -15,6 +15,17 @@ celery_app.conf.update(
     accept_content=["json"],
 )
 
+# =========================
+# Периодические задачи (Beat)
+# =========================
+celery_app.conf.beat_schedule = {
+    "parse-news-every-30-minutes": {
+        "task": "parse_and_save_news",
+        "schedule": timedelta(minutes=30),
+        "args": (50,),  # лимит Telegram сообщений
+    },
+}
+
 # Регистрируем все задачи из папки tasks
-# Здесь должны быть импортированы все модули с задачами
-import app.tasks.news_tasks  # <--- обязательно импортировать
+import app.tasks.news_tasks
+

@@ -9,8 +9,15 @@ from app.config import settings
 from app.utils.rate_limit import random_delay
 
 
-async def parse_news_rbk_site() -> List[Dict]:
-    url = settings.rbc_url
+async def parse_news_rbk_site(url: str = None, source_name: str = "rbc.ru") -> List[Dict]:
+    """
+    Парсинг новостей с RBC. Поддерживает динамическое указание URL и source_name.
+
+    :param url: URL сайта для парсинга. Если None, берется из настроек.
+    :param source_name: Название источника (для заполнения source)
+    :return: Список словарей в формате ParsedNewsSchema
+    """
+    url = url or settings.rbc_url
     html = await fetch_html(url)
 
     if not html:
@@ -24,11 +31,11 @@ async def parse_news_rbk_site() -> List[Dict]:
 
     main_content = soup.select_one(".l-col-main")
     if not main_content:
-        logger.warning("⚠️ Не найден основной контейнер RBC")
+        logger.warning(f"⚠️ Не найден основной контейнер {source_name}")
         return []
 
     articles = main_content.find_all("div", class_="item__wrap l-col-center")
-    logger.info(f"Найдено статей RBC: {len(articles)}")
+    logger.info(f"Найдено статей {source_name}: {len(articles)}")
 
     for item in articles:
         await random_delay(2.0, 5.0)
@@ -40,7 +47,6 @@ async def parse_news_rbk_site() -> List[Dict]:
 
             title = title_tag.get_text(strip=True)[:300]
             href = title_tag.get("href")
-
             if not title or not href or not href.startswith("http"):
                 continue
 
@@ -49,7 +55,6 @@ async def parse_news_rbk_site() -> List[Dict]:
                 continue
 
             article_soup = BeautifulSoup(html_article, "html.parser")
-
             content_tag = article_soup.find("div", class_="l-col-center-590 article__content")
             if not content_tag:
                 continue
@@ -64,15 +69,14 @@ async def parse_news_rbk_site() -> List[Dict]:
 
             summary = full_text[:400] + "..." if len(full_text) > 400 else full_text
 
-            time_tag = content_tag.find("time")
+            # Парсинг даты публикации
             published_at = None
-            if time_tag:
-                dt_raw = time_tag.get("datetime")
-                if dt_raw:
-                    try:
-                        published_at = datetime.fromisoformat(dt_raw.replace("Z", "+00:00"))
-                    except ValueError:
-                        logger.warning(f"⚠️ Не удалось распарсить дату RBC: {dt_raw}")
+            time_tag = content_tag.find("time")
+            if time_tag and time_tag.get("datetime"):
+                try:
+                    published_at = datetime.fromisoformat(time_tag.get("datetime").replace("Z", "+00:00"))
+                except ValueError:
+                    logger.warning(f"⚠️ Не удалось распарсить дату {source_name}: {time_tag.get('datetime')}")
 
             news_items.append(
                 {
@@ -81,15 +85,16 @@ async def parse_news_rbk_site() -> List[Dict]:
                     "summary": summary,
                     "published_at": published_at,
                     "raw_text": full_text,
-                    "source": "rbc.ru",
+                    "source": source_name,
                     "source_type": "site",
-                    "source_url": "https://www.rbc.ru",
+                    "source_url": url,
                 }
             )
 
         except Exception:
-            logger.exception("❌ Ошибка при разборе статьи RBC")
+            logger.exception(f"❌ Ошибка при разборе статьи {source_name}")
             continue
 
-    logger.info(f"✅ Успешно спарсено новостей RBC: {len(news_items)}")
+    logger.info(f"✅ Успешно спарсено новостей {source_name}: {len(news_items)}")
     return news_items
+

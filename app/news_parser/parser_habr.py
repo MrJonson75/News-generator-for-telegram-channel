@@ -9,8 +9,14 @@ from app.config import settings
 from app.utils.rate_limit import random_delay
 
 
-async def parse_news_habr_site() -> List[Dict]:
-    url = settings.habr_url
+async def parse_news_habr_site(url: str = None, source_name: str = "habr.com") -> List[Dict]:
+    """
+    Парсинг новостей с Habr. Поддерживает динамическое указание URL.
+
+    :param url: URL сайта для парсинга. Если None, берется из настроек.
+    :param source_name: Название источника (для заполнения source)
+    """
+    url = url or settings.habr_url
     html = await fetch_html(url)
 
     if not html:
@@ -27,7 +33,6 @@ async def parse_news_habr_site() -> List[Dict]:
 
     for item in articles:
         await random_delay(0.8, 2.5)
-
         try:
             title_tag = item.find("a", class_="tm-title__link")
             if not title_tag:
@@ -35,7 +40,6 @@ async def parse_news_habr_site() -> List[Dict]:
 
             title = title_tag.get_text(strip=True)[:300]
             href = title_tag.get("href")
-
             if not title or not href or not href.startswith("/ru/news"):
                 continue
 
@@ -51,15 +55,14 @@ async def parse_news_habr_site() -> List[Dict]:
 
             summary = full_text[:500] + "..." if len(full_text) > 500 else full_text
 
-            time_tag = item.find("time")
+            # Парсинг даты публикации
             published_at = None
-            if time_tag:
-                dt_raw = time_tag.get("datetime")
-                if dt_raw:
-                    try:
-                        published_at = datetime.fromisoformat(dt_raw.replace("Z", "+00:00"))
-                    except ValueError:
-                        logger.warning(f"⚠️ Не удалось распарсить дату: {dt_raw}")
+            time_tag = item.find("time")
+            if time_tag and time_tag.get("datetime"):
+                try:
+                    published_at = datetime.fromisoformat(time_tag.get("datetime").replace("Z", "+00:00"))
+                except ValueError:
+                    logger.warning(f"⚠️ Не удалось распарсить дату: {time_tag.get('datetime')}")
 
             news_items.append(
                 {
@@ -67,9 +70,9 @@ async def parse_news_habr_site() -> List[Dict]:
                     "url": url_full,
                     "summary": summary,
                     "published_at": published_at,
-                    "source": "habr.com",
+                    "source": source_name,
                     "source_type": "site",
-                    "source_url": "https://habr.com",
+                    "source_url": url,
                 }
             )
 
@@ -77,5 +80,6 @@ async def parse_news_habr_site() -> List[Dict]:
             logger.exception("❌ Ошибка при разборе статьи Habr")
             continue
 
-    logger.info(f"✅ Успешно спарсено новостей Habr: {len(news_items)}")
+    logger.info(f"✅ Успешно спарсено новостей {source_name}: {len(news_items)}")
     return news_items
+
