@@ -56,6 +56,11 @@ class Settings(BaseSettings):
 
     # OpenAI
     openai_api_key: str = Field("", alias="OPENAI_API_KEY")
+    openai_proxy: str = Field("", alias="OPENAI_PROXY")  # user:pass@host:port
+    openai_prompt: str = Field(
+        "На основе следующей новости составь короткий и яркий пост для Telegram:",
+        alias="OPENAI_PROMPT"
+    )
 
     # Фильтры
     news_keywords: str = Field("python,fastapi,django", alias="NEWS_KEYWORDS")
