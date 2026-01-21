@@ -108,3 +108,26 @@ class PostSchema(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# =========================
+# Обновление статуса поста
+# =========================
+class PostStatusUpdateSchema(BaseModel):
+    status: PostStatus = Field(..., description="Новый статус поста")
+
+
+# =========================
+# Ответ при удалении
+# =========================
+class DeleteResponseSchema(BaseModel):
+    status: str
+    detail: str
+
+
+# =========================
+# Ответ генерации
+# =========================
+class GenerateResponseSchema(BaseModel):
+    status: str
+    generated_count: int

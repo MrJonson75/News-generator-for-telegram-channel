@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from app.config import settings, APP_META
-from app.api.endpoints import router as endpoints_router
-
+from app.api.sources import router as sources_router
+from app.database import test_connection
+from app.ai.openai_client import openai_client
+from app.logger import logger
 
 app = FastAPI(
     title=APP_META.name,
@@ -14,9 +16,26 @@ app = FastAPI(
     }
 )
 
-app.include_router(endpoints_router)
+app.include_router(
+    sources_router,
+)
 
 
 @app.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "генератор новостей"}
+
+
+@app.get("/health")
+async def health():
+    logger.info("health check")
+    result = await test_connection()
+    openai_status = await openai_client.health_client()
+    logger.info(f"openai status: {openai_status}, database status: {result}")
+    return {
+        "status": "ok",
+        "database": result,
+        "openai": openai_status
+    }
+
+
