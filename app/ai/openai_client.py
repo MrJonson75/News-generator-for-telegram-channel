@@ -82,6 +82,23 @@ class OpenAIClient:
             logger.exception(f"❌ Ошибка при генерации текста OpenAI: {e}")
             return ""
 
+    async def generate_keywords(self, text: str, max_keywords: int = 5) -> list[str]:
+        """
+        Генерация ключевых слов из текста через OpenAI.
+        """
+        prompt = (
+        f"""
+        Проанализируй предоставленный текст и составь список релевантных ключевых слов-тегов не больше четырех. 
+        Теги должны отражать основные темы, сущности и концепции.\n{text}
+        \nПредоставь только теги через запятую.
+        """
+
+        )
+        response = await self.generate_text(prompt, max_tokens=100)
+        # Разбиваем по запятой и убираем пустые строки
+        keywords = [word.strip() for word in response.split(",") if word.strip()]
+        return keywords
+
     async def health_client(self) -> dict:
         """
         Проверяет доступность OpenAI API через прокси (если задан) и возвращает статус.
@@ -111,14 +128,3 @@ class OpenAIClient:
 
 # Синглтон клиент
 openai_client = OpenAIClient()
-
-
-# Тестовый запуск
-async def main():
-    print(await openai_client.health_client())
-    text = await openai_client.generate_text("Напиши короткий пост о Python")
-    print(text)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

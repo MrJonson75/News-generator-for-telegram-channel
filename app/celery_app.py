@@ -39,11 +39,16 @@ celery_app.conf.beat_schedule = {
         "task": "generate_posts",
         "schedule": crontab(minute="*/10"),
     },
+    # Генерация тегов для новых постов каждые 15 минут
+    "generate-post-keywords-every-15-minutes": {
+        "task": "generate_post_keywords",
+        "schedule": crontab(minute="*/15"),
+    },
     # Очистка старых failed постов каждый день в 03:00
     "cleanup-old-failed-posts-daily": {
         "task": "cleanup_old_failed_posts",
         "schedule": crontab(hour=3, minute=0),
-        "args": (7,),  # по умолчанию удаляем посты старше 7 дней
+        "args": (7,),  # удаляем посты старше 7 дней
     },
 }
 
@@ -52,3 +57,4 @@ celery_app.conf.beat_schedule = {
 # ================================
 import app.tasks.news_tasks
 import app.tasks.post_tasks
+
