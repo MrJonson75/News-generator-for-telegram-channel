@@ -31,11 +31,12 @@ def parse_and_save_news(limit_telegram: int = 50):
                 if not source_obj:
                     source_obj = Source(
                         name=news.source,
-                        type=news.source_type.value,  # site / tg
+                        type=news.source_type.value,
                         url=news.source_url,
                     )
                     session.add(source_obj)
-                    await session.flush()  # без commit внутри цикла!
+                    await session.flush()
+                    logger.info(f"🆕 Создан новый источник: {source_obj.name} ({source_obj.type})")
 
                 # --- Проверка дубликата по URL ---
                 result = await session.execute(

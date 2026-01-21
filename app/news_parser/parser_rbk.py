@@ -10,21 +10,6 @@ from app.utils.rate_limit import random_delay
 
 
 async def parse_news_rbk_site() -> List[Dict]:
-    """
-    Парсинг новостей с сайта rbk.ru
-    Возвращает данные в унифицированном формате:
-
-    {
-        "title": str,
-        "url": str,
-        "summary": str,
-        "published_at": datetime | None,
-        "raw_text": str | None,
-        "source": "rbc.ru",
-        "source_type": "site",
-        "source_url": "https://www.rbc.ru"
-    }
-    """
     url = settings.rbc_url
     html = await fetch_html(url)
 
@@ -53,9 +38,10 @@ async def parse_news_rbk_site() -> List[Dict]:
             if not title_tag:
                 continue
 
-            title = title_tag.get_text(strip=True)
+            title = title_tag.get_text(strip=True)[:300]
             href = title_tag.get("href")
-            if not title or not href:
+
+            if not title or not href or not href.startswith("http"):
                 continue
 
             html_article = await fetch_html(href)
@@ -70,7 +56,6 @@ async def parse_news_rbk_site() -> List[Dict]:
 
             text_block = content_tag.find("div", class_="article__text")
             if not text_block:
-                logger.debug("⚠️ Нет article__text у статьи RBC")
                 continue
 
             full_text = text_block.get_text(strip=True)
@@ -79,16 +64,15 @@ async def parse_news_rbk_site() -> List[Dict]:
 
             summary = full_text[:400] + "..." if len(full_text) > 400 else full_text
 
-            # Дата публикации
             time_tag = content_tag.find("time")
             published_at = None
-            if time_tag and time_tag.get("datetime"):
-                try:
-                    published_at = datetime.fromisoformat(
-                        time_tag.get("datetime").replace("Z", "+00:00")
-                    )
-                except Exception:
-                    logger.warning(f"⚠️ Не удалось распарсить дату: {time_tag.get('datetime')}")
+            if time_tag:
+                dt_raw = time_tag.get("datetime")
+                if dt_raw:
+                    try:
+                        published_at = datetime.fromisoformat(dt_raw.replace("Z", "+00:00"))
+                    except ValueError:
+                        logger.warning(f"⚠️ Не удалось распарсить дату RBC: {dt_raw}")
 
             news_items.append(
                 {
@@ -109,17 +93,3 @@ async def parse_news_rbk_site() -> List[Dict]:
 
     logger.info(f"✅ Успешно спарсено новостей RBC: {len(news_items)}")
     return news_items
-
-
-# =========================
-# Тестовый запуск
-# =========================
-async def main():
-    news = await parse_news_rbk_site()
-    for item in news:
-        print(item)
-
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())

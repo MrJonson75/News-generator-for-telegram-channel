@@ -1,6 +1,7 @@
 # app/news_parser/news_collector.py
 import asyncio
 from typing import List
+from datetime import datetime
 
 from app.logger import logger
 from app.config import settings
@@ -10,11 +11,15 @@ from app.api.schemas import ParsedNewsSchema
 
 async def collect_news(limit_telegram: int = 50) -> List[ParsedNewsSchema]:
     """
-    Сбор и валидация новостей с Habr, RBK и Telegram.
+    Сбор, валидация и фильтрация новостей с Habr, RBK и Telegram.
+    Возвращает список валидированных ParsedNewsSchema.
     """
 
     logger.info("🚀 Старт сбора новостей со всех источников")
 
+    # =========================
+    # Параллельный запуск парсеров
+    # =========================
     tasks = [
         parser_habr.parse_news_habr_site(),
         parser_rbk.parse_news_rbk_site(),
@@ -23,6 +28,9 @@ async def collect_news(limit_telegram: int = 50) -> List[ParsedNewsSchema]:
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
+    # =========================
+    # Объединяем результаты
+    # =========================
     raw_news = []
     for source_news in results:
         if isinstance(source_news, Exception):
@@ -61,23 +69,37 @@ async def collect_news(limit_telegram: int = 50) -> List[ParsedNewsSchema]:
     # =========================
     # Фильтрация по ключевым словам
     # =========================
-    keywords = settings.keywords_list
+    keywords = [kw.lower() for kw in settings.keywords_list] if settings.keywords_list else []
     if keywords:
-        filtered_news = []
-        for news in unique_news:
-            text = f"{news.title} {news.summary}".lower()
-            if any(word.lower() in text for word in keywords):
-                filtered_news.append(news)
+        filtered_news = [
+            news for news in unique_news
+            if any(word in f"{news.title} {news.summary}".lower() for word in keywords)
+        ]
         logger.info(f"После фильтрации по ключевым словам: {len(filtered_news)} новостей")
     else:
         filtered_news = unique_news
 
     # =========================
-    # Сортировка по дате
+    # Сортировка по дате публикации (новые первыми)
     # =========================
     filtered_news.sort(
-        key=lambda x: x.published_at or "",
+        key=lambda x: x.published_at or datetime.min,
         reverse=True
     )
 
     return filtered_news
+
+
+# =========================
+# Тестовый запуск
+# =========================
+async def main():
+    news = await collect_news(limit_telegram=20)
+    for idx, item in enumerate(news, 1):
+        print(f"{idx}. [{item.source_type}] {item.title} ({item.published_at})")
+        print(f"   {item.url}\n")
+        print(f"Кратко: {item.summary}\n")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
