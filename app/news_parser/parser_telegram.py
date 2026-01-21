@@ -1,19 +1,31 @@
 # app/news_parser/parser_telegram.py
+from typing import List, Dict
+from datetime import datetime
+
 from telethon import TelegramClient
-from telethon.tl.functions.messages import GetHistoryRequest
+
 from app.config import settings
 from app.logger import logger
 from app.utils.rate_limit import random_delay
 
 
-# app/news_parser/parser_telegram.py
-from telethon import TelegramClient
-from app.config import settings
-from app.logger import logger
-from app.utils.rate_limit import random_delay
+async def parse_telegram_channel(limit: int = 50) -> List[Dict]:
+    """
+    Парсинг новостей из Telegram-канала.
+    Возвращает данные в унифицированном формате:
 
+    {
+        "title": str,
+        "url": str,
+        "summary": str,
+        "published_at": datetime | None,
+        "raw_text": str,
+        "source": str,
+        "source_type": "tg",
+        "source_url": str
+    }
+    """
 
-async def parse_telegram_channel(limit: int = 50):
     api_id = settings.telegram_api_id
     api_hash = settings.telegram_api_hash
     channel = settings.telegram_news_channel
@@ -22,7 +34,11 @@ async def parse_telegram_channel(limit: int = 50):
         logger.error("❌ Не заданы TELEGRAM_API_ID или TELEGRAM_API_HASH")
         return []
 
-    news_items = []
+    if not channel:
+        logger.error("❌ Не задан TELEGRAM_NEWS_CHANNEL")
+        return []
+
+    news_items: List[Dict] = []
 
     async with TelegramClient("telegram_parser_session", api_id, api_hash) as client:
         logger.info(f"📡 Подключение к Telegram каналу: {channel}")
@@ -32,28 +48,41 @@ async def parse_telegram_channel(limit: int = 50):
 
             if not message.text:
                 continue
+
             text = message.text.strip()
             if len(text) < 30:
                 continue
 
+            title = text.split("\n")[0][:200]
+            summary = text[:500]
+
+            published_at = None
+            if message.date:
+                try:
+                    published_at = message.date
+                except Exception:
+                    logger.warning(f"⚠️ Ошибка преобразования даты сообщения {message.id}")
+
             news_items.append(
                 {
-                    "title": text.split("\n")[0][:200],
+                    "title": title,
                     "url": f"https://t.me/{channel}/{message.id}",
-                    "summary": text[:500],
-                    "source": "telegram",
-                    "published_at": message.date.isoformat() if message.date else None,
-                    "raw_text": text,  # полное сообщение
+                    "summary": summary,
+                    "published_at": published_at,
+                    "raw_text": text,
+                    "source": channel,
+                    "source_type": "tg",
+                    "source_url": f"https://t.me/{channel}",
                 }
             )
 
-    logger.info(f"Успешно спарсено сообщений Telegram: {len(news_items)}")
+    logger.info(f"✅ Успешно спарсено сообщений Telegram: {len(news_items)}")
     return news_items
 
 
-
-
+# =========================
 # Тестовый запуск
+# =========================
 async def main():
     news = await parse_telegram_channel(limit=10)
     for item in news:
@@ -62,5 +91,4 @@ async def main():
 
 if __name__ == "__main__":
     import asyncio
-
     asyncio.run(main())
