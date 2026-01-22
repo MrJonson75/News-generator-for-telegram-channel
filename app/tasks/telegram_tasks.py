@@ -1,3 +1,4 @@
+# app/tasks/telegram_tasks.py
 import asyncio
 from datetime import datetime
 from telethon import TelegramClient
@@ -16,7 +17,10 @@ def publish_posts_to_telegram():
     """
     Публикует посты со статусом `published` в Telegram канал через Telethon.
     После успешной публикации статус меняется на `sent`.
-    Под новостью публикуются ключевые слова (теги) и ссылка на источник в кликабельном формате.
+    Форматирование поста:
+    - Основной текст (generated_text)
+    - Теги в сером код-блоке
+    - Ссылка на источник с иконкой
     """
     async def _main():
         client = TelegramClient(StringSession(), settings.telegram_api_id, settings.telegram_api_hash)
@@ -42,7 +46,7 @@ def publish_posts_to_telegram():
                     # Добавляем теги, если есть
                     if post.keywords:
                         tags_text = " ".join(f"#{kw.word.replace(' ', '_')}" for kw in post.keywords)
-                        message_text += f"\n\n{tags_text}"
+                        message_text += f"\n\n`{tags_text}`"  # серый код-блок для тегов
 
                     # Добавляем кликабельную ссылку на источник
                     if post.news and post.news.url:
@@ -61,8 +65,8 @@ def publish_posts_to_telegram():
                     await session.commit()
 
                     logger.info(
-                        f"📣 Опубликован пост {post.id} с тегами: "
-                        + (', '.join(kw.word for kw in post.keywords) if post.keywords else "нет")
+                        f"📣 Опубликован пост {post.id} "
+                        + (f"с тегами: {', '.join(kw.word for kw in post.keywords)}" if post.keywords else "без тегов")
                         + (f" и источником: {post.news.url}" if post.news and post.news.url else "")
                     )
                     count += 1
