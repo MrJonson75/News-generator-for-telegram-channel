@@ -21,6 +21,7 @@ class PostStatus(str, Enum):
     new = "new"
     generated = "generated"
     published = "published"
+    sent = "sent"
     failed = "failed"
 
 
