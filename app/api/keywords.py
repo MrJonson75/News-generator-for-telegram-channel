@@ -85,6 +85,9 @@ async def get_keyword(
     keyword_id: UUID,
     session: AsyncSession = Depends(get_session)
 ):
+    """
+    Получение тега по его ID.
+    """
     try:
         result = await session.execute(
             select(Keyword).where(Keyword.id == str(keyword_id))
@@ -110,6 +113,9 @@ async def create_keyword(
     payload: KeywordCreateSchema,
     session: AsyncSession = Depends(get_session)
 ):
+    """
+    Создание нового тега.
+    """
     try:
         # Проверка уникальности
         exists = await session.execute(
@@ -141,6 +147,9 @@ async def update_keyword(
     payload: KeywordUpdateSchema,
     session: AsyncSession = Depends(get_session)
 ):
+    """
+    Обновление тега.
+    """
     try:
         result = await session.execute(
             select(Keyword).where(Keyword.id == str(keyword_id))
@@ -180,6 +189,9 @@ async def delete_keyword(
     keyword_id: UUID,
     session: AsyncSession = Depends(get_session)
 ):
+    """
+    Удаление тега.
+    """
     try:
         result = await session.execute(
             select(Keyword).where(Keyword.id == str(keyword_id))

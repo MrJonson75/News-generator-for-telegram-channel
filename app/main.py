@@ -129,6 +129,9 @@ async def health():
 # =====================================================
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Обработка ошибок валидации FastAPI.
+    """
     logger.warning(f"❌ Validation error: {exc.errors()}")
     return JSONResponse(
         status_code=HTTP_422_UNPROCESSABLE_ENTITY,
@@ -145,6 +148,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # =====================================================
 @app.on_event("startup")
 async def startup_event():
+    """
+    Событие старта приложения.
+    """
     logger.info("🚀 Приложение запущено")
     # Проверка состояния OpenAI при старте
     try:

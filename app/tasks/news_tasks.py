@@ -10,6 +10,12 @@ from app.news_parser import news_collector
 
 @celery_app.task(name="parse_and_save_news")
 def parse_and_save_news(limit_telegram: int = 50):
+    """
+    Задача для парсинга и сохранения новостей
+    :param limit_telegram: Максимальное количество новостей для Telegram
+    :return: Количество сохраненных новостей
+
+    """
     async def _main():
         news_list = await news_collector.collect_news(limit_telegram=limit_telegram)
         if not news_list:

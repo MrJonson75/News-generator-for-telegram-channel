@@ -126,5 +126,5 @@ class OpenAIClient:
             return {"status": "error", "detail": str(e)}
 
 
-# Синглтон клиент
+# клиент
 openai_client = OpenAIClient()

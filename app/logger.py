@@ -51,6 +51,10 @@ class SafeTimedRotatingFileHandler(TimedRotatingFileHandler):
 
 
 def setup_logger(name: str = "aibot") -> logging.Logger:
+    """
+    Инициализация логгера с ротацией и консольным выводом.
+
+    """
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
     logger.propagate = False

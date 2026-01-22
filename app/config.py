@@ -77,6 +77,7 @@ class Settings(BaseSettings):
 
     @property
     def keywords_list(self) -> list[str]:
+        """Преобразуем строку с ключевыми словами в список"""
         return [
             word.strip().lower()
             for word in self.news_keywords.split(",")
@@ -84,6 +85,7 @@ class Settings(BaseSettings):
         ]
 
     def log_config(self):
+        """Логируем конфигурацию"""
         from app.logger import logger
 
         logger.info("⚙️ App configuration:")

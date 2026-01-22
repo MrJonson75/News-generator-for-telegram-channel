@@ -23,6 +23,11 @@ OPENAI_KEYWORD_DELAY = 20  # секунда, чтобы не превысить 
 # =========================
 @celery_app.task(name="generate_posts")
 def generate_posts():
+    """
+    Генерация постов на основе новостей и сохранение их в базе данных.
+    Возвращает количество сгенерированных постов.
+
+    """
     async def _main():
         async with async_session() as session:
             news_list = (await session.execute(select(NewsItem))).scalars().all()
@@ -123,6 +128,10 @@ def generate_posts():
 # =========================
 @celery_app.task(name="cleanup_old_failed_posts")
 def cleanup_old_failed_posts(days: int = 7):
+    """
+    Очистка старых failed постов, которые не удалось сгенерировать.
+
+    """
     async def _main():
         async with async_session() as session:
             cutoff = datetime.utcnow() - timedelta(days=days)
@@ -161,6 +170,10 @@ def cleanup_old_failed_posts(days: int = 7):
 # =========================
 @celery_app.task(name="generate_post_keywords")
 def generate_post_keywords():
+    """
+    Генерация ключевых слов для постов на основе их текста.
+
+    """
     async def _main():
         async with async_session() as session:
             # Загружаем посты и их keywords заранее (selectinload)
