@@ -16,7 +16,7 @@ def publish_posts_to_telegram():
     """
     Публикует посты со статусом `published` в Telegram канал через Telethon.
     После успешной публикации статус меняется на `sent`.
-    Под новостью публикуются ключевые слова (теги).
+    Под новостью публикуются ключевые слова (теги) и ссылка на источник в кликабельном формате.
     """
     async def _main():
         client = TelegramClient(StringSession(), settings.telegram_api_id, settings.telegram_api_hash)
@@ -27,7 +27,10 @@ def publish_posts_to_telegram():
             result = await session.execute(
                 select(Post)
                 .where(Post.status == PostStatus.published)
-                .options(selectinload(Post.keywords))
+                .options(
+                    selectinload(Post.keywords),  # загружаем теги
+                    selectinload(Post.news)       # загружаем связанный NewsItem
+                )
             )
             posts = result.scalars().all()
 
@@ -35,17 +38,33 @@ def publish_posts_to_telegram():
             for post in posts:
                 try:
                     message_text = post.generated_text or "Без текста"
+
+                    # Добавляем теги, если есть
                     if post.keywords:
                         tags_text = " ".join(f"#{kw.word.replace(' ', '_')}" for kw in post.keywords)
                         message_text += f"\n\n{tags_text}"
 
-                    await client.send_message(settings.telegram_channel_id, message_text)
+                    # Добавляем кликабельную ссылку на источник
+                    if post.news and post.news.url:
+                        message_text += f"\n\n🔗 [Источник]({post.news.url})"
 
+                    # Отправка сообщения с MarkdownV2
+                    await client.send_message(
+                        settings.telegram_channel_id,
+                        message_text,
+                        parse_mode="markdown"
+                    )
+
+                    # Обновляем статус поста после успешной публикации
                     post.status = PostStatus.sent
                     post.published_at = datetime.utcnow()
                     await session.commit()
 
-                    logger.info(f"📣 Опубликован пост {post.id} с тегами: {', '.join(kw.word for kw in post.keywords)}")
+                    logger.info(
+                        f"📣 Опубликован пост {post.id} с тегами: "
+                        + (', '.join(kw.word for kw in post.keywords) if post.keywords else "нет")
+                        + (f" и источником: {post.news.url}" if post.news and post.news.url else "")
+                    )
                     count += 1
                     await asyncio.sleep(1)
 
