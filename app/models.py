@@ -27,6 +27,7 @@ class PostStatus(enum.Enum):
     new = "new"
     generated = "generated"
     published = "published"
+    sent = "sent"         # ✅ новый статус после публикации
     failed = "failed"
 
 

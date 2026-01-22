@@ -50,6 +50,11 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=3, minute=0),
         "args": (7,),  # удаляем посты старше 7 дней
     },
+    # Публикация постов каждые 10 минут
+    "publish-posts-to-telegram-every-2-minutes": {
+        "task": "publish_posts_to_telegram",
+        "schedule": crontab(minute="*/2"),
+    },
 }
 
 # ================================
@@ -57,4 +62,5 @@ celery_app.conf.beat_schedule = {
 # ================================
 import app.tasks.news_tasks
 import app.tasks.post_tasks
+import app.tasks.telegram_tasks
 

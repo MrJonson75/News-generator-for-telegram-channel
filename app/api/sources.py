@@ -266,8 +266,8 @@ async def publish_post(post_id: UUID, session: AsyncSession = Depends(get_sessio
         if not post:
             raise HTTPException(404, "Пост не найден")
 
-        if post.status != PostStatus.generated:
-            raise HTTPException(400, "Пост должен быть в статусе 'generated' для публикации")
+        # if post.status != PostStatus.new:
+        #     raise HTTPException(400, "Пост должен быть в статусе 'new' для публикации")
 
         post.status = PostStatus.published
 
