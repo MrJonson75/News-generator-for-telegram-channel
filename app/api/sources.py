@@ -8,13 +8,15 @@ from uuid import UUID
 from typing import Optional
 
 from app.database import get_session
-from app.models import Post
+from app.models import Post, Source
 from app.api.schemas import (
     PostSchema,
     PostStatusUpdateSchema,
     DeleteResponseSchema,
     GenerateResponseSchema,
-    PostStatus
+    PostStatus,
+    SourceToggleSchema,
+    SourceSchema
 )
 from app.celery_app import celery_app
 from app.logger import logger
@@ -234,3 +236,82 @@ async def publish_post(post_id: UUID, session: AsyncSession = Depends(get_sessio
     except Exception:
         logger.exception(f"❌ Ошибка публикации поста {post_id}")
         raise HTTPException(500, "Не удалось опубликовать пост")
+
+
+# ======================================================
+# Получение всех источников новостей
+# ======================================================
+@router.get(
+    "/sources",
+    response_model=list[SourceSchema],
+    summary="Получить список источников новостей",
+)
+async def get_sources(session: AsyncSession = Depends(get_session)):
+    """
+    Возвращает список всех источников новостей.
+
+    Используется для управления парсерами:
+    - включение / выключение источников
+    - администрирование системы
+    """
+    try:
+        result = await session.execute(select(Source))
+        return result.scalars().all()
+    except Exception:
+        logger.exception("❌ Ошибка получения источников")
+        raise HTTPException(500, "Не удалось получить источники")
+
+
+# ======================================================
+# Управление активностью источника
+# ======================================================
+@router.patch(
+    "/sources/{source_id}/enabled",
+    response_model=SourceSchema,
+    summary="Включить или отключить источник новостей"
+)
+async def toggle_source_enabled(
+    source_id: UUID,
+    payload: SourceToggleSchema,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Управление активностью источника новостей.
+
+    Если `enabled = false` — источник исключается из парсинга
+    Если `enabled = true` — источник снова участвует в сборе новостей
+
+    **Пример запроса:**
+    ```json
+    {
+      "enabled": false
+    }
+    ```
+    """
+    try:
+        result = await session.execute(
+            select(Source).where(Source.id == str(source_id))
+        )
+        source = result.scalar_one_or_none()
+
+        if not source:
+            raise HTTPException(404, "Источник не найден")
+
+        old_state = source.enabled
+        source.enabled = payload.enabled
+
+        await session.commit()
+        await session.refresh(source)
+
+        logger.info(
+            f"🔧 Источник '{source.name}' ({source.id}): {old_state} → {payload.enabled}"
+        )
+
+        return source
+
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception(f"❌ Ошибка изменения состояния источника {source_id}")
+        raise HTTPException(500, "Не удалось изменить состояние источника")
+

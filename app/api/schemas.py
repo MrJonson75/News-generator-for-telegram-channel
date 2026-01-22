@@ -131,3 +131,10 @@ class DeleteResponseSchema(BaseModel):
 class GenerateResponseSchema(BaseModel):
     status: str
     generated_count: int
+
+
+# =========================
+# Входная схема для управления источниками Новостей (вкл/выкл)
+# =========================
+class SourceToggleSchema(BaseModel):
+    enabled: bool = Field(..., description="Включён ли источник")
