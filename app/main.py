@@ -9,6 +9,7 @@ from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from app.config import settings, APP_META
 from app.api.sources import router as sources_router
+from app.api.keywords import router as keywords_router
 from app.database import test_connection
 from app.ai.openai_client import openai_client
 from app.logger import logger
@@ -50,6 +51,7 @@ app.add_middleware(
 # Подключение роутеров
 # =====================================================
 app.include_router(sources_router)
+app.include_router(keywords_router)
 
 
 # =====================================================

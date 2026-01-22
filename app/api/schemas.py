@@ -138,3 +138,17 @@ class GenerateResponseSchema(BaseModel):
 # =========================
 class SourceToggleSchema(BaseModel):
     enabled: bool = Field(..., description="Включён ли источник")
+
+
+# =========================
+# Создание тега
+# =========================
+class KeywordCreateSchema(BaseModel):
+    word: str = Field(..., min_length=1, max_length=50, description="Ключевое слово")
+
+
+# =========================
+# Обновление тега
+# =========================
+class KeywordUpdateSchema(BaseModel):
+    word: str = Field(..., min_length=1, max_length=50, description="Новое ключевое слово")
