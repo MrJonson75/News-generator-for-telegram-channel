@@ -4,9 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from uuid import UUID
 from typing import Optional
+from sqlalchemy import func
 
 from app.database import get_session
-from app.models import Keyword
+from app.models import Keyword, post_keywords
 from app.api.schemas import (
     KeywordSchema,
     KeywordCreateSchema,
@@ -42,6 +43,38 @@ async def get_keywords(
     except Exception:
         logger.exception("❌ Ошибка получения тегов")
         raise HTTPException(500, "Не удалось получить теги")
+
+
+# ======================================================
+# Статистика по тегам
+# ======================================================
+@router.get("/stats", summary="Статистика по тегам")
+async def keyword_stats(session: AsyncSession = Depends(get_session)):
+    """
+    Возвращает статистику по тегам:
+    сколько постов связано с каждым тегом.
+    """
+    try:
+        stmt = (
+            select(
+                Keyword.word,
+                func.count(post_keywords.c.post_id).label("posts_count")
+            )
+            .outerjoin(post_keywords, Keyword.id == post_keywords.c.keyword_id)
+            .group_by(Keyword.id)
+            .order_by(func.count(post_keywords.c.post_id).desc())
+        )
+
+        result = await session.execute(stmt)
+        rows = result.all()
+
+        return [
+            {"keyword": word, "posts_count": count}
+            for word, count in rows
+        ]
+    except Exception:
+        logger.exception("❌ Ошибка получения статистики по тегам")
+        raise HTTPException(500, "Не удалось получить статистику по тегам")
 
 
 # ======================================================
@@ -166,3 +199,5 @@ async def delete_keyword(
     except Exception:
         logger.exception(f"❌ Ошибка удаления тега {keyword_id}")
         raise HTTPException(500, "Не удалось удалить тег")
+
+

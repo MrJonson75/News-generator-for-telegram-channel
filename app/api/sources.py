@@ -8,7 +8,7 @@ from uuid import UUID
 from typing import Optional
 
 from app.database import get_session
-from app.models import Post, Source
+from app.models import Post, Source, Keyword
 from app.api.schemas import (
     PostSchema,
     PostStatusUpdateSchema,
@@ -16,7 +16,8 @@ from app.api.schemas import (
     GenerateResponseSchema,
     PostStatus,
     SourceToggleSchema,
-    SourceSchema
+    SourceSchema,
+    PostKeywordAttachSchema
 )
 from app.celery_app import celery_app
 from app.logger import logger
@@ -29,49 +30,38 @@ router = APIRouter(prefix="/api", tags=["posts"])
 # ======================================================
 @router.get("/posts", response_model=list[PostSchema], summary="Получить список постов")
 async def get_posts(
-    status: Optional[PostStatus] = Query(
-        None,
-        description="Фильтр по статусу поста",
-        examples={
-            "new": {"summary": "Новые посты", "value": "new"},
-            "generated": {"summary": "Сгенерированные посты", "value": "generated"},
-            "published": {"summary": "Опубликованные посты", "value": "published"},
-            "failed": {"summary": "С ошибкой", "value": "failed"}
-        }
-    ),
-    page: int = Query(
-        1,
-        ge=1,
-        description="Номер страницы",
-        examples={"example": {"summary": "Первая страница", "value": 1}}
-    ),
-    size: int = Query(
-        20,
-        ge=1,
-        le=100,
-        description="Количество постов на странице",
-        examples={"example": {"summary": "Размер страницы", "value": 20}}
-    ),
+    status: Optional[PostStatus] = Query(None, description="Фильтр по статусу поста"),
+    keyword: Optional[str] = Query(None, description="Фильтр по тегу"),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
     session: AsyncSession = Depends(get_session)
 ):
     """
-    Получение списка постов с фильтром и пагинацией.
+    Получение списка постов с фильтрами:
 
-    **Примеры запросов:**
-    - `/api/posts` — все посты
-    - `/api/posts?status=new` — только новые посты
-    - `/api/posts?page=2&size=10` — вторая страница, по 10 постов
+    - по статусу: `/api/posts?status=new`
+    - по тегу: `/api/posts?keyword=python`
+    - совместно: `/api/posts?status=published&keyword=ai`
     """
     try:
         stmt = select(Post).options(selectinload(Post.keywords))
+
         if status:
             stmt = stmt.where(Post.status == status)
-        stmt = stmt.order_by(Post.created_at.desc()).offset((page - 1) * size).limit(size)
+
+        if keyword:
+            stmt = stmt.join(Post.keywords).where(Keyword.word == keyword)
+
+        stmt = stmt.order_by(Post.created_at.desc()) \
+                   .offset((page - 1) * size) \
+                   .limit(size)
+
         result = await session.execute(stmt)
-        return result.scalars().all()
+        return result.scalars().unique().all()
     except Exception:
         logger.exception("❌ Ошибка получения постов")
         raise HTTPException(500, "Не удалось получить посты")
+
 
 
 # ======================================================
@@ -98,6 +88,61 @@ async def get_post(post_id: UUID, session: AsyncSession = Depends(get_session)):
     except Exception:
         logger.exception(f"❌ Ошибка получения поста {post_id}")
         raise HTTPException(500, "Не удалось получить пост")
+
+
+# ======================================================
+# Ручная привязка тегов к посту
+# ======================================================
+@router.post("/posts/{post_id}/keywords", response_model=PostSchema, summary="Привязать теги к посту")
+async def attach_keywords_to_post(
+    post_id: UUID,
+    payload: PostKeywordAttachSchema,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Ручная привязка тегов к посту.
+
+    Пример:
+    {
+        "keywords": ["python", "ai", "telegram"]
+    }
+    """
+    try:
+        result = await session.execute(
+            select(Post).options(selectinload(Post.keywords)).where(Post.id == str(post_id))
+        )
+        post = result.scalar_one_or_none()
+        if not post:
+            raise HTTPException(404, "Пост не найден")
+
+        attached = []
+
+        for word in payload.keywords:
+            word = word.strip().lower()
+
+            result = await session.execute(select(Keyword).where(Keyword.word == word))
+            keyword = result.scalar_one_or_none()
+
+            if not keyword:
+                keyword = Keyword(word=word)
+                session.add(keyword)
+                await session.flush()
+
+            if keyword not in post.keywords:
+                post.keywords.append(keyword)
+                attached.append(word)
+
+        await session.commit()
+        await session.refresh(post)
+
+        logger.info(f"🔗 Теги {attached} привязаны к посту {post_id}")
+        return post
+
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception(f"❌ Ошибка привязки тегов к посту {post_id}")
+        raise HTTPException(500, "Не удалось привязать теги")
 
 
 # ======================================================

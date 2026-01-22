@@ -152,3 +152,10 @@ class KeywordCreateSchema(BaseModel):
 # =========================
 class KeywordUpdateSchema(BaseModel):
     word: str = Field(..., min_length=1, max_length=50, description="Новое ключевое слово")
+
+
+# =========================
+# Привязка тегов к посту
+# =========================
+class PostKeywordAttachSchema(BaseModel):
+    keywords: list[str] = Field(..., description="Список тегов для привязки")
