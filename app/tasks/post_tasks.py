@@ -1,4 +1,5 @@
 # app/tasks/post_tasks.py
+
 import asyncio
 from datetime import datetime, timedelta
 from sqlalchemy import select
@@ -9,13 +10,13 @@ from app.celery_app import celery_app
 from app.database import async_session
 from app.models import NewsItem, Post, PostStatus, Keyword
 from app.logger import logger
-from app.ai.openai_client import openai_client
+from app.ai.openai_client import openai_client, RateLimitError
+from app.utils.rate_limit import CyclicRateLimiter
 
 MAX_RETRIES = 3
 MAX_PER_RUN = 3
 MAX_DELETE_PER_RUN = 20
-OPENAI_DELAY = 0.5  # задержка между запросами к OpenAI
-OPENAI_KEYWORD_DELAY = 20  # секунда, чтобы не превысить rate limit (RPM)
+MIN_TEXT_LENGTH = 20  # минимальная длина сгенерированного текста
 
 
 # =========================
@@ -23,36 +24,48 @@ OPENAI_KEYWORD_DELAY = 20  # секунда, чтобы не превысить 
 # =========================
 @celery_app.task(name="generate_posts")
 def generate_posts():
-    """
-    Генерация постов на основе новостей и сохранение их в базе данных.
-    Возвращает количество сгенерированных постов.
-
-    """
     async def _main():
         async with async_session() as session:
-            news_list = (await session.execute(select(NewsItem))).scalars().all()
+            news_list = (await session.execute(
+                select(NewsItem).limit(MAX_PER_RUN * 5)
+            )).scalars().all()
+
             generated_count = 0
+            rate_limiter = CyclicRateLimiter(burst=3, interval=20, cooldown=60)
 
             for news in news_list:
                 if generated_count >= MAX_PER_RUN:
                     break
 
-                post = (await session.execute(select(Post).where(Post.news_id == news.id))).scalar_one_or_none()
+                post = (await session.execute(
+                    select(Post).where(Post.news_id == news.id)
+                )).scalar_one_or_none()
 
-                # Пропускаем уже опубликованные
+                # Пропускаем опубликованные
                 if post and post.status == PostStatus.published:
                     continue
 
-                # Удаляем failed посты, если превышен лимит retry
+                # Архивируем failed, если превышен лимит retry
                 if post and post.status == PostStatus.failed and post.retry_count >= MAX_RETRIES:
-                    logger.info(f"🗑 Удаляем failed пост и новость: {news.id}")
-                    await session.delete(post)
-                    await session.delete(news)
+                    logger.info(f"📦 Архивирован failed пост: {news.id}")
+                    post.status = PostStatus.archived
                     continue
 
-                text_source = news.raw_text or news.summary
+                # Проверка источника текста
+                text_source = (news.raw_text or news.summary or "").strip()
+                if not text_source:
+                    logger.warning(f"🟡 Пропущена пустая новость {news.id}")
+                    continue
+
                 try:
+                    await rate_limiter.wait()
                     generated_text = await openai_client.generate_text(text_source)
+
+                except RateLimitError as e:
+                    logger.warning(f"⏳ Rate limit для {news.id}: {e}, ждём 60 сек")
+                    await asyncio.sleep(60)
+                    continue
+
                 except Exception as e:
                     logger.warning(f"⚠️ Ошибка генерации для {news.id}: {e}")
                     if post:
@@ -61,66 +74,55 @@ def generate_posts():
                         if post.retry_count >= MAX_RETRIES:
                             post.status = PostStatus.failed
                     else:
-                        post = Post(
+                        session.add(Post(
                             news_id=news.id,
                             status=PostStatus.failed,
                             retry_count=1,
                             error_message=str(e)
-                        )
-                        session.add(post)
+                        ))
                     continue
 
-                if not generated_text or not generated_text.strip():
-                    logger.warning(f"⚠️ Пустой ответ OpenAI для {news.id}")
+                # Проверка качества ответа
+                clean_text = (generated_text or "").strip()
+                if not clean_text or len(clean_text) < MIN_TEXT_LENGTH:
+                    logger.warning(f"⚠️ Слишком короткий или пустой ответ OpenAI для {news.id}")
                     if post:
                         post.retry_count += 1
-                        post.error_message = "Empty OpenAI response"
+                        post.error_message = "Too short or empty OpenAI response"
                         if post.retry_count >= MAX_RETRIES:
                             post.status = PostStatus.failed
                     else:
-                        post = Post(
+                        session.add(Post(
                             news_id=news.id,
                             status=PostStatus.failed,
                             retry_count=1,
-                            error_message="Empty OpenAI response"
-                        )
-                        session.add(post)
+                            error_message="Too short or empty OpenAI response"
+                        ))
                     continue
 
-                # Сохраняем успешную генерацию
+                # Успешная генерация
                 if post:
-                    post.generated_text = generated_text
+                    post.generated_text = clean_text
                     post.status = PostStatus.new
                     post.retry_count = 0
                     post.error_message = None
                     logger.info(f"♻️ Обновлён пост для {news.id}")
                 else:
-                    new_post = Post(
+                    session.add(Post(
                         news_id=news.id,
-                        generated_text=generated_text,
+                        generated_text=clean_text,
                         status=PostStatus.new,
                         retry_count=0,
                         error_message=None
-                    )
-                    session.add(new_post)
+                    ))
                     logger.info(f"🆕 Создан пост для {news.id}")
 
                 generated_count += 1
-                await asyncio.sleep(OPENAI_DELAY)
 
             await session.commit()
             return generated_count
 
-    try:
-        count = asyncio.run(_main())
-    except RuntimeError:
-        # fallback для Windows
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        count = loop.run_until_complete(_main())
-
-    logger.info(f"✅ Сгенерировано постов: {count}")
-    return count
+    return asyncio.run(_main())
 
 
 # =========================
@@ -128,10 +130,6 @@ def generate_posts():
 # =========================
 @celery_app.task(name="cleanup_old_failed_posts")
 def cleanup_old_failed_posts(days: int = 7):
-    """
-    Очистка старых failed постов, которые не удалось сгенерировать.
-
-    """
     async def _main():
         async with async_session() as session:
             cutoff = datetime.utcnow() - timedelta(days=days)
@@ -143,40 +141,23 @@ def cleanup_old_failed_posts(days: int = 7):
             )).scalars().all()
 
             deleted_count = 0
-            for i, post in enumerate(posts):
-                if i >= MAX_DELETE_PER_RUN:
-                    break
-                if post.news:
-                    await session.delete(post.news)
+            for post in posts[:MAX_DELETE_PER_RUN]:
                 await session.delete(post)
                 deleted_count += 1
 
             await session.commit()
             return deleted_count
 
-    try:
-        count = asyncio.run(_main())
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        count = loop.run_until_complete(_main())
-
-    logger.info(f"🗑 Очистка старых failed постов: {count} удалено")
-    return count
+    return asyncio.run(_main())
 
 
 # =========================
-# Генерация ключевых слов (тегов) для постов
+# Генерация ключевых слов
 # =========================
 @celery_app.task(name="generate_post_keywords")
 def generate_post_keywords():
-    """
-    Генерация ключевых слов для постов на основе их текста.
-
-    """
     async def _main():
         async with async_session() as session:
-            # Загружаем посты и их keywords заранее (selectinload)
             posts = (await session.execute(
                 select(Post)
                 .options(selectinload(Post.keywords))
@@ -184,29 +165,32 @@ def generate_post_keywords():
             )).scalars().all()
 
             updated_count = 0
+            rate_limiter = CyclicRateLimiter(burst=3, interval=20, cooldown=60)
 
             for post in posts:
                 if post.keywords:
-                    logger.info(f"🟡 Пропущен пост {post.id}, теги уже есть")
                     continue
 
-                text_for_analysis = post.generated_text or (post.news.summary if post.news else "")
-                if not text_for_analysis.strip():
-                    logger.info(f"🟡 Пропущен пост {post.id}, пустой текст")
+                text = (post.generated_text or "").strip()
+                if not text:
+                    logger.warning(f"🟡 Пропущен пост {post.id}, пустой текст")
                     continue
 
                 keywords = []
                 for attempt in range(MAX_RETRIES):
                     try:
-                        keywords = await openai_client.generate_keywords(text_for_analysis)
+                        await rate_limiter.wait()
+                        keywords = await openai_client.generate_keywords(text)
                         if keywords:
-                            break  # успешно получили
+                            break
+                    except RateLimitError:
+                        logger.warning("⏳ Rate limit при генерации тегов, ждём 60 сек")
+                        await asyncio.sleep(60)
                     except Exception as e:
-                        logger.warning(f"⚠️ Попытка {attempt+1}/{MAX_RETRIES} генерации тегов для {post.id} не удалась: {e}")
-                        await asyncio.sleep(OPENAI_KEYWORD_DELAY)  # ждём перед повтором
+                        logger.warning(f"⚠️ Ошибка генерации тегов для {post.id}: {e}")
 
                 if not keywords:
-                    logger.error(f"❌ Не удалось сгенерировать теги для поста {post.id} после {MAX_RETRIES} попыток")
+                    logger.error(f"❌ Не удалось сгенерировать теги для поста {post.id}")
                     continue
 
                 for word in keywords:
@@ -218,27 +202,18 @@ def generate_post_keywords():
                         if not keyword_obj:
                             keyword_obj = Keyword(word=word)
                             session.add(keyword_obj)
-                            await session.flush()  # присвоение ID
+                            await session.flush()
 
                         if keyword_obj not in post.keywords:
                             post.keywords.append(keyword_obj)
+
                     except IntegrityError:
                         await session.rollback()
-                        continue
 
                 updated_count += 1
-                logger.info(f"✅ Сгенерированы теги для поста {post.id}: {keywords}")
-                await asyncio.sleep(OPENAI_KEYWORD_DELAY)  # соблюдаем rate limit
+                logger.info(f"🏷 Теги для поста {post.id}: {keywords}")
 
             await session.commit()
             return updated_count
 
-    try:
-        count = asyncio.run(_main())
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        count = loop.run_until_complete(_main())
-
-    logger.info(f"🏷 Сгенерировано тегов для постов: {count}")
-    return count
+    return asyncio.run(_main())
