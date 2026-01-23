@@ -34,15 +34,15 @@ celery_app.conf.beat_schedule = {
         "task": "parse_and_save_news",
         "schedule": crontab(minute="*/30"),
     },
-    # Генерация постов каждые 10 минут
-    "generate-posts-every-10-minutes": {
+    # Генерация постов каждые 55 минут
+    "generate-posts-every-55-minutes": {
         "task": "generate_posts",
-        "schedule": crontab(minute="*/10"),
+        "schedule": crontab(minute="*/55"),
     },
-    # Генерация тегов для новых постов каждые 15 минут
-    "generate-post-keywords-every-15-minutes": {
+    # Генерация тегов для новых постов каждые 65 минут
+    "generate-post-keywords-every-65-minutes": {
         "task": "generate_post_keywords",
-        "schedule": crontab(minute="*/15"),
+        "schedule": crontab(minute="*/65"),
     },
     # Очистка старых failed постов каждый день в 03:00
     "cleanup-old-failed-posts-daily": {
@@ -50,10 +50,10 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=3, minute=0),
         "args": (7,),  # удаляем посты старше 7 дней
     },
-    # Публикация постов каждые 10 минут
-    "publish-posts-to-telegram-every-10-minutes": {
+    # Публикация постов каждые 40 минут
+    "publish-posts-to-telegram-every-40-minutes": {
         "task": "publish_posts_to_telegram",
-        "schedule": crontab(minute="*/10"),
+        "schedule": crontab(minute="*/40"),
     },
 }
 
